@@ -1,0 +1,30 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "misc",
+  "pattern": [
+    "AIA",
+    "FSE",
+    "AAA"
+  ],
+  "key": {
+    "A": {
+      "item": "minecraft:amethyst_shard"
+    },
+    "I": {
+      "item": "grimpipes:item_pipe"
+    },
+    "F": {
+      "item": "grimpipes:fluid_pipe"
+    },
+    "E": {
+      "item": "grimpipes:energy_pipe"
+    },
+    "S": {
+      "tag": "c:ender_pearls"
+    }
+  },
+  "result": {
+    "id": "grimpipes:omni_pipe",
+    "count": 4
+  }
+}

@@ -1,0 +1,10 @@
+{
+  "variants": {
+    "waterlogged=false": {
+      "model": "grimpipes:block/reaper_pipe"
+    },
+    "waterlogged=true": {
+      "model": "grimpipes:block/reaper_pipe"
+    }
+  }
+}

@@ -1,0 +1,24 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "misc",
+  "pattern": [
+    "ENE",
+    "NUN",
+    "ENE"
+  ],
+  "key": {
+    "E": {
+      "item": "minecraft:echo_shard"
+    },
+    "N": {
+      "item": "minecraft:netherite_scrap"
+    },
+    "U": {
+      "item": "grimpipes:wraithbound_upgrade"
+    }
+  },
+  "result": {
+    "id": "grimpipes:soulforged_upgrade",
+    "count": 1
+  }
+}

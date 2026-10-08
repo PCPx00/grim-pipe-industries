@@ -1,0 +1,24 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "misc",
+  "pattern": [
+    "DAD",
+    "AUA",
+    "DAD"
+  ],
+  "key": {
+    "D": {
+      "tag": "c:gems/diamond"
+    },
+    "A": {
+      "item": "minecraft:amethyst_shard"
+    },
+    "U": {
+      "item": "grimpipes:whispering_upgrade"
+    }
+  },
+  "result": {
+    "id": "grimpipes:restless_upgrade",
+    "count": 2
+  }
+}

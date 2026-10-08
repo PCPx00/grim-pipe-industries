@@ -1,0 +1,6 @@
+{
+  "loader": "grimpipes:pipe",
+  "textures": {
+    "particle": "grimpipes:block/pipe_item_node"
+  }
+}

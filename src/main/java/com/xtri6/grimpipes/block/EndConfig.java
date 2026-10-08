@@ -6,6 +6,7 @@ import com.xtri6.grimpipes.item.UpgradeItem;
 import com.xtri6.grimpipes.pipe.FilterMode;
 import com.xtri6.grimpipes.pipe.FilterMode.Decision;
 import com.xtri6.grimpipes.pipe.PipeTier;
+import com.xtri6.grimpipes.pipe.RedstoneMode;
 
 import net.minecraft.core.HolderLookup;
 import net.minecraft.nbt.CompoundTag;
@@ -21,9 +22,15 @@ import net.neoforged.neoforge.items.ItemStackHandler;
 public final class EndConfig {
     public static final int FILTER_SLOTS = 9;
 
+    public static final int MIN_PRIORITY = -99;
+    public static final int MAX_PRIORITY = 99;
+
     private final Runnable onCardChanged;
     private final Runnable onChanged;
+    private final Runnable onRoutingChanged;
     private FilterMode mode = FilterMode.BLACKLIST;
+    private RedstoneMode redstone = RedstoneMode.ALWAYS;
+    private int priority;
     private boolean filterEmpty = true;
     private PipeTier tier = PipeTier.HOLLOW;
 
@@ -59,9 +66,33 @@ public final class EndConfig {
         }
     };
 
-    EndConfig(Runnable onCardChanged, Runnable onChanged) {
+    EndConfig(Runnable onCardChanged, Runnable onChanged, Runnable onRoutingChanged) {
         this.onCardChanged = onCardChanged;
         this.onChanged = onChanged;
+        this.onRoutingChanged = onRoutingChanged;
+    }
+
+    public RedstoneMode redstone() {
+        return redstone;
+    }
+
+    public void setRedstone(RedstoneMode redstone) {
+        this.redstone = redstone;
+        onChanged.run();
+    }
+
+    /** Output ends with a higher priority are filled first. */
+    public int priority() {
+        return priority;
+    }
+
+    public void setPriority(int priority) {
+        int clamped = Math.max(MIN_PRIORITY, Math.min(MAX_PRIORITY, priority));
+        if (clamped != this.priority) {
+            this.priority = clamped;
+            onChanged.run();
+            onRoutingChanged.run();
+        }
     }
 
     public PipeTier tier() {
@@ -78,7 +109,8 @@ public final class EndConfig {
     }
 
     public boolean isDefault() {
-        return card.getStackInSlot(0).isEmpty() && filterEmpty && mode == FilterMode.BLACKLIST;
+        return card.getStackInSlot(0).isEmpty() && filterEmpty && mode == FilterMode.BLACKLIST
+                && redstone == RedstoneMode.ALWAYS && priority == 0;
     }
 
     private void refreshFilterEmpty() {
@@ -132,6 +164,46 @@ public final class EndConfig {
         return decide(false);
     }
 
+    // ---- Output ends: what they accept ----
+
+    private boolean matchesItem(ItemStack stack) {
+        for (int i = 0; i < FILTER_SLOTS; i++) {
+            ItemStack f = filter.getStackInSlot(i);
+            if (!f.isEmpty() && ItemStack.isSameItem(f, stack)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private boolean matchesFluid(FluidStack fluid) {
+        for (int i = 0; i < FILTER_SLOTS; i++) {
+            ItemStack f = filter.getStackInSlot(i);
+            if (!f.isEmpty()) {
+                Optional<FluidStack> c = FluidUtil.getFluidContained(f);
+                if (c.isPresent() && FluidStack.isSameFluid(c.get(), fluid)) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    /** Whether an Output end takes this item. Whitelist: only listed items. Blacklist: anything else. */
+    public boolean accepts(ItemStack stack) {
+        if (filterEmpty) {
+            return mode != FilterMode.WHITELIST;
+        }
+        return mode == FilterMode.WHITELIST ? matchesItem(stack) : !matchesItem(stack);
+    }
+
+    public boolean accepts(FluidStack fluid) {
+        if (filterEmpty) {
+            return mode != FilterMode.WHITELIST;
+        }
+        return mode == FilterMode.WHITELIST ? matchesFluid(fluid) : !matchesFluid(fluid);
+    }
+
     // ---- Save ----
 
     CompoundTag save(HolderLookup.Provider registries) {
@@ -139,6 +211,8 @@ public final class EndConfig {
         tag.put("Card", card.serializeNBT(registries));
         tag.put("Filter", filter.serializeNBT(registries));
         tag.putInt("Mode", mode.ordinal());
+        tag.putInt("Redstone", redstone.ordinal());
+        tag.putInt("Priority", priority);
         return tag;
     }
 
@@ -146,6 +220,8 @@ public final class EndConfig {
         card.deserializeNBT(registries, tag.getCompound("Card"));
         filter.deserializeNBT(registries, tag.getCompound("Filter"));
         mode = FilterMode.byIndex(tag.getInt("Mode"));
+        redstone = RedstoneMode.byIndex(tag.getInt("Redstone"));
+        priority = Math.max(MIN_PRIORITY, Math.min(MAX_PRIORITY, tag.getInt("Priority")));
         ItemStack s = card.getStackInSlot(0);
         tier = s.getItem() instanceof UpgradeItem u ? u.tier() : PipeTier.HOLLOW;
         refreshFilterEmpty();

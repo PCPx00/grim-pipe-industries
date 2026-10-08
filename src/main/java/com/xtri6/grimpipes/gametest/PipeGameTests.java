@@ -288,6 +288,115 @@ public final class PipeGameTests {
         });
     }
 
+    // ---------------- 1.3.0: redstone, output priority, output filters ----------------
+
+    private static Container[] splitSetup(GameTestHelper h) {
+        Container a = chest(h, 0, 1, 2);
+        Container low = chest(h, 2, 1, 3);   // south of the splitter
+        Container high = chest(h, 2, 1, 1);  // north of the splitter
+        PipeBlockEntity in = pipe(h, 1, 1, 2, PipeType.ITEM);
+        pipe(h, 2, 1, 2, PipeType.ITEM);
+        in.setMode(PipeType.ITEM.ordinal(), Direction.WEST, ConnectionMode.INPUT);
+        card(in, PipeType.ITEM, Direction.WEST, PipeTier.WRAITHBOUND);
+        return new Container[]{a, low, high};
+    }
+
+    @GameTest(template = "empty", timeoutTicks = 200)
+    public static void redstoneNeedsSignal(GameTestHelper h) {
+        Container a = chest(h, 0, 1, 0);
+        Container b = chest(h, 2, 1, 0);
+        a.setItem(0, new ItemStack(Items.STICK, 16));
+        PipeBlockEntity p = pipe(h, 1, 1, 0, PipeType.ITEM);
+        p.setMode(PipeType.ITEM.ordinal(), Direction.WEST, ConnectionMode.INPUT);
+        p.endConfig(PipeType.ITEM.ordinal(), Direction.WEST).setRedstone(com.xtri6.grimpipes.pipe.RedstoneMode.HIGH);
+        h.runAfterDelay(40, () -> {
+            h.assertTrue(count(b, Items.STICK) == 0, "moved without a redstone signal");
+            h.setBlock(1, 2, 0, Blocks.REDSTONE_BLOCK);
+            h.succeedWhen(() -> h.assertTrue(count(b, Items.STICK) == 16, "signal on, moved " + count(b, Items.STICK)));
+        });
+    }
+
+    @GameTest(template = "empty", timeoutTicks = 200)
+    public static void redstoneStopsWithSignal(GameTestHelper h) {
+        Container a = chest(h, 0, 1, 0);
+        Container b = chest(h, 2, 1, 0);
+        a.setItem(0, new ItemStack(Items.STICK, 16));
+        h.setBlock(1, 2, 0, Blocks.REDSTONE_BLOCK);
+        PipeBlockEntity p = pipe(h, 1, 1, 0, PipeType.ITEM);
+        p.setMode(PipeType.ITEM.ordinal(), Direction.WEST, ConnectionMode.INPUT);
+        p.endConfig(PipeType.ITEM.ordinal(), Direction.WEST).setRedstone(com.xtri6.grimpipes.pipe.RedstoneMode.LOW);
+        h.runAfterDelay(40, () -> {
+            h.assertTrue(count(b, Items.STICK) == 0, "moved while powered");
+            h.setBlock(1, 2, 0, Blocks.AIR);
+            h.succeedWhen(() -> h.assertTrue(count(b, Items.STICK) == 16, "signal off, moved " + count(b, Items.STICK)));
+        });
+    }
+
+    @GameTest(template = "empty", timeoutTicks = 200)
+    public static void outputPriorityFillsHigherFirst(GameTestHelper h) {
+        Container[] c = splitSetup(h);
+        c[0].setItem(0, new ItemStack(Items.STICK, 32));
+        PipeBlockEntity splitter = h.getBlockEntity(new BlockPos(2, 1, 2));
+        splitter.endConfig(PipeType.ITEM.ordinal(), Direction.NORTH).setPriority(5);
+        h.succeedWhen(() -> {
+            h.assertTrue(count(c[2], Items.STICK) == 32, "high-priority chest has " + count(c[2], Items.STICK));
+            h.assertTrue(count(c[1], Items.STICK) == 0, "low-priority chest got " + count(c[1], Items.STICK));
+        });
+    }
+
+    @GameTest(template = "empty", timeoutTicks = 200)
+    public static void outputFiltersRouteByItem(GameTestHelper h) {
+        Container[] c = splitSetup(h);
+        c[0].setItem(0, new ItemStack(Items.COBBLESTONE, 16));
+        c[0].setItem(1, new ItemStack(Items.DIRT, 16));
+        PipeBlockEntity splitter = h.getBlockEntity(new BlockPos(2, 1, 2));
+        filter(splitter, PipeType.ITEM, Direction.NORTH, FilterMode.WHITELIST, Items.COBBLESTONE);
+        filter(splitter, PipeType.ITEM, Direction.SOUTH, FilterMode.BLACKLIST, Items.COBBLESTONE);
+        h.succeedWhen(() -> {
+            h.assertTrue(count(c[2], Items.COBBLESTONE) == 16 && count(c[2], Items.DIRT) == 0, "whitelist chest wrong");
+            h.assertTrue(count(c[1], Items.DIRT) == 16 && count(c[1], Items.COBBLESTONE) == 0, "blacklist chest wrong");
+        });
+    }
+
+    @GameTest(template = "empty", timeoutTicks = 200)
+    public static void energyPriority(GameTestHelper h) {
+        h.setBlock(0, 1, 2, Blocks.COPPER_BLOCK);
+        h.setBlock(2, 1, 3, Blocks.IRON_BLOCK);
+        h.setBlock(2, 1, 1, Blocks.IRON_BLOCK);
+        PipeBlockEntity in = pipe(h, 1, 1, 2, PipeType.ENERGY);
+        PipeBlockEntity splitter = pipe(h, 2, 1, 2, PipeType.ENERGY);
+        in.setMode(PipeType.ENERGY.ordinal(), Direction.WEST, ConnectionMode.INPUT);
+        splitter.endConfig(PipeType.ENERGY.ordinal(), Direction.NORTH).setPriority(1);
+        BlockPos high = h.absolutePos(new BlockPos(2, 1, 1));
+        BlockPos low = h.absolutePos(new BlockPos(2, 1, 3));
+        h.succeedWhen(() -> {
+            int hi = TestCaps.ENERGY.containsKey(high) ? TestCaps.ENERGY.get(high).getEnergyStored() : 0;
+            int lo = TestCaps.ENERGY.containsKey(low) ? TestCaps.ENERGY.get(low).getEnergyStored() : 0;
+            h.assertTrue(hi == 100_000 && lo == 0, "high " + hi + " FE, low " + lo + " FE");
+        });
+    }
+
+    @GameTest(template = "empty", timeoutTicks = 40)
+    public static void outputEndMenuWorks(GameTestHelper h) {
+        chest(h, 0, 1, 0);
+        PipeBlockEntity p = pipe(h, 1, 1, 0, PipeType.ITEM);
+        net.minecraft.world.entity.player.Player player = h.makeMockPlayer(net.minecraft.world.level.GameType.SURVIVAL);
+        player.moveTo(h.absolutePos(new BlockPos(1, 2, 1)).getCenter());
+        com.xtri6.grimpipes.menu.EndMenu menu = new com.xtri6.grimpipes.menu.EndMenu(0, player.getInventory(), p, PipeType.ITEM, Direction.WEST);
+        h.assertTrue(!menu.isInput(), "should be an Output end");
+        h.assertTrue(menu.filterStart() == 0, "Output ends must not have a card slot");
+        for (int i = 0; i < 3; i++) {
+            menu.clickMenuButton(player, com.xtri6.grimpipes.menu.EndMenu.BTN_PRIORITY_UP);
+        }
+        menu.clickMenuButton(player, com.xtri6.grimpipes.menu.EndMenu.BTN_PRIORITY_DOWN_10);
+        h.assertTrue(p.endConfig(PipeType.ITEM.ordinal(), Direction.WEST).priority() == -7, "priority is "
+                + p.endConfig(PipeType.ITEM.ordinal(), Direction.WEST).priority());
+        menu.clickMenuButton(player, com.xtri6.grimpipes.menu.EndMenu.BTN_MODE); // Blacklist -> (skip Void) -> Whitelist
+        h.assertTrue(menu.mode() == FilterMode.WHITELIST, "Output mode went to " + menu.mode());
+        h.assertTrue(!menu.clickMenuButton(player, com.xtri6.grimpipes.menu.EndMenu.BTN_REDSTONE), "Output ends have no redstone mode");
+        h.succeed();
+    }
+
     /** Disconnecting the link between two pipes stops flow; reconnecting resumes it. */
     @GameTest(template = "empty", timeoutTicks = 400)
     public static void wrenchDisconnectAndReconnect(GameTestHelper h) {

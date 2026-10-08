@@ -75,6 +75,9 @@ final class FluidTransport {
             if (to == null) {
                 continue;
             }
+            if (!dest.accepts(available)) {
+                continue;
+            }
             int accepted = to.fill(available.copyWithAmount(remaining), FluidAction.SIMULATE);
             if (accepted <= 0) {
                 continue;
@@ -107,7 +110,7 @@ final class FluidTransport {
                 continue;
             }
             IFluidHandler to = dest.fluids();
-            if (to == null) {
+            if (to == null || !dest.accepts(resource)) {
                 continue;
             }
             int filled = to.fill(resource.copyWithAmount(remaining), action);

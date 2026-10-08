@@ -154,6 +154,9 @@ final class MekanismChemicals implements Chemicals.Bridge {
             if (e == null || stack.isEmpty()) {
                 return stack;
             }
+            if (!e.active()) {
+                return stack; // held off by redstone
+            }
             long now = e.level().getGameTime();
             if (now != window) {
                 window = now;

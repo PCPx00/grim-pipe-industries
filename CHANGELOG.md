@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.3.0 — Redstone, priority and output filters
+
+- **Redstone control on Input ends:** Always on, Needs signal, or Stops with signal. Applies to pulling and to anything pushed into the end.
+- **Output ends have their own screen** (empty-hand right-click): a **priority** number (higher fills first, equal priorities share round-robin; Shift for ±10) and a **Whitelist / Blacklist** filter for items and fluids.
+- Priority also applies to energy and chemicals.
+- **Mekanism support verified** on a real server with Mekanism 10.7: hydrogen through the Chemical Pipe and oxygen through the Omni Pipe, tank to tank.
+
 ## 1.2.0 — First public release
 
 **Pipes**

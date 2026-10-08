@@ -51,6 +51,7 @@ public class PipeBlockEntity extends BlockEntity {
     private final byte[] modes = new byte[SLOTS];
     private final EndConfig[] ends = new EndConfig[SLOTS];
     private PipeKey key = PipeKey.EMPTY;
+    private boolean powered;
 
     // ---- Server-only runtime state (never saved) ----
     private final Endpoint[] endpoints = new Endpoint[SLOTS];
@@ -101,6 +102,10 @@ public class PipeBlockEntity extends BlockEntity {
             }, () -> {
                 setChanged();
                 wakeEnd(type, dir);
+            }, () -> {
+                if (level instanceof ServerLevel server) {
+                    NetworkManager.get(server).invalidate(worldPosition); // re-sort outputs by priority
+                }
             });
             ends[i] = e;
         }
@@ -123,6 +128,11 @@ public class PipeBlockEntity extends BlockEntity {
 
     public PipeKey key() {
         return key;
+    }
+
+    /** Whether a redstone signal reaches this pipe block (cached; updated on neighbor changes). */
+    public boolean isPowered() {
+        return powered;
     }
 
     public List<PipeType> types() {
@@ -233,6 +243,15 @@ public class PipeBlockEntity extends BlockEntity {
 
     private void recomputeKey(boolean forceSync) {
         ServerLevel server = (ServerLevel) level;
+        boolean nowPowered = server.hasNeighborSignal(worldPosition);
+        if (nowPowered != powered) {
+            powered = nowPowered;
+            for (Endpoint e : endpoints) {
+                if (e != null) {
+                    e.wake();
+                }
+            }
+        }
         PipeKey.Builder b = new PipeKey.Builder().types(typeMask);
         for (Direction d : Direction.values()) {
             BlockPos np = worldPosition.relative(d);

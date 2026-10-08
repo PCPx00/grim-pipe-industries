@@ -9,6 +9,7 @@ import com.xtri6.grimpipes.item.UpgradeItem;
 import com.xtri6.grimpipes.pipe.ConnectionMode;
 import com.xtri6.grimpipes.pipe.FilterMode;
 import com.xtri6.grimpipes.pipe.PipeType;
+import com.xtri6.grimpipes.pipe.RedstoneMode;
 import com.xtri6.grimpipes.pipe.ResourceKind;
 
 import net.minecraft.core.BlockPos;
@@ -27,12 +28,16 @@ import net.neoforged.neoforge.items.ItemStackHandler;
 import net.neoforged.neoforge.items.SlotItemHandler;
 
 /**
- * GUI for one Input end: a speed card slot and (for item and fluid strands) a 9-slot ghost filter with
- * Whitelist / Blacklist / Void.
+ * GUI for one pipe end.
+ * <ul>
+ *     <li>Input ends: speed card slot, filter (Whitelist / Blacklist / Void) and redstone control.</li>
+ *     <li>Output ends: priority and filter (Whitelist / Blacklist).</li>
+ * </ul>
+ * Filters only exist on strands that carry items or fluids.
  * <pre>
- * slot 0       speed card
- * slots 1-9    filter (ghost: clicking stores a copy, the real item stays with the player), if shown
- * then         player inventory (27) and hotbar (9)
+ * [Input only] slot 0     speed card
+ * next 9 slots            filter (ghost: clicking stores a copy, the real item stays with the player), if shown
+ * then                    player inventory (27) and hotbar (9)
  * </pre>
  */
 public class EndMenu extends AbstractContainerMenu {
@@ -43,11 +48,22 @@ public class EndMenu extends AbstractContainerMenu {
     public static final int FILTER_X = 98;
     public static final int FILTER_Y = 48;
     public static final int INV_Y = 140;
+
     public static final int BTN_MODE = 0;
+    public static final int BTN_REDSTONE = 1;
+    public static final int BTN_PRIORITY_DOWN = 2;
+    public static final int BTN_PRIORITY_UP = 3;
+    public static final int BTN_PRIORITY_DOWN_10 = 4;
+    public static final int BTN_PRIORITY_UP_10 = 5;
+
+    private static final int DATA_MODE = 0;
+    private static final int DATA_REDSTONE = 1;
+    private static final int DATA_PRIORITY = 2;
 
     private final BlockPos pos;
     private final PipeType type;
     private final Direction side;
+    private final boolean input;
     private final boolean showFilter;
     private final ContainerData data;
     @Nullable
@@ -58,26 +74,30 @@ public class EndMenu extends AbstractContainerMenu {
     /** Client side, built from the open-screen packet. */
     public EndMenu(int id, Inventory inv, RegistryFriendlyByteBuf buf) {
         this(id, inv, buf.readBlockPos(), PipeType.byIndex(buf.readVarInt()), Direction.from3DDataValue(buf.readVarInt()),
-                null, new ItemStackHandler(1), new ItemStackHandler(EndConfig.FILTER_SLOTS), new SimpleContainerData(1));
+                buf.readBoolean(), null, new ItemStackHandler(1), new ItemStackHandler(EndConfig.FILTER_SLOTS), new SimpleContainerData(3));
     }
 
     /** Server side, backed by the real end. */
     public EndMenu(int id, Inventory inv, PipeBlockEntity pipe, PipeType type, Direction side) {
-        this(id, inv, pipe.getBlockPos(), type, side, pipe, pipe.endConfig(type.ordinal(), side).card,
-                pipe.endConfig(type.ordinal(), side).filter, dataFor(pipe, type, side));
+        this(id, inv, pipe.getBlockPos(), type, side, pipe.mode(type.ordinal(), side) == ConnectionMode.INPUT, pipe,
+                pipe.endConfig(type.ordinal(), side).card, pipe.endConfig(type.ordinal(), side).filter,
+                dataFor(pipe.endConfig(type.ordinal(), side)));
     }
 
-    private EndMenu(int id, Inventory inv, BlockPos pos, PipeType type, Direction side, @Nullable PipeBlockEntity pipe,
-                    IItemHandler card, IItemHandler filter, ContainerData data) {
+    private EndMenu(int id, Inventory inv, BlockPos pos, PipeType type, Direction side, boolean input,
+                    @Nullable PipeBlockEntity pipe, IItemHandler card, IItemHandler filter, ContainerData data) {
         super(Registration.END_MENU.get(), id);
         this.pos = pos;
         this.type = type;
         this.side = side;
+        this.input = input;
         this.pipe = pipe;
         this.data = data;
         this.showFilter = hasFilter(type);
 
-        addSlot(new CardSlot(card, 0, CARD_X, CARD_Y));
+        if (input) {
+            addSlot(new CardSlot(card, 0, CARD_X, CARD_Y));
+        }
         filterStart = slots.size();
         if (showFilter) {
             for (int row = 0; row < 3; row++) {
@@ -99,27 +119,42 @@ public class EndMenu extends AbstractContainerMenu {
         addDataSlots(data);
     }
 
-    /** Filters apply to items and fluids; energy and chemical ends only get the card slot. */
+    /** Filters apply to items and fluids; energy and chemical ends have none. */
     public static boolean hasFilter(PipeType type) {
         return type.carries(ResourceKind.ITEM) || type.carries(ResourceKind.FLUID);
     }
 
-    private static ContainerData dataFor(PipeBlockEntity pipe, PipeType type, Direction side) {
-        EndConfig cfg = pipe.endConfig(type.ordinal(), side);
+    /** Opens the screen packet for an end (server side). */
+    public static void writeOpenData(RegistryFriendlyByteBuf buf, PipeBlockEntity pipe, PipeType type, Direction side) {
+        buf.writeBlockPos(pipe.getBlockPos());
+        buf.writeVarInt(type.ordinal());
+        buf.writeVarInt(side.get3DDataValue());
+        buf.writeBoolean(pipe.mode(type.ordinal(), side) == ConnectionMode.INPUT);
+    }
+
+    private static ContainerData dataFor(EndConfig cfg) {
         return new ContainerData() {
             @Override
             public int get(int index) {
-                return cfg.mode().ordinal();
+                return switch (index) {
+                    case DATA_MODE -> cfg.mode().ordinal();
+                    case DATA_REDSTONE -> cfg.redstone().ordinal();
+                    default -> cfg.priority();
+                };
             }
 
             @Override
             public void set(int index, int value) {
-                cfg.setMode(FilterMode.byIndex(value));
+                switch (index) {
+                    case DATA_MODE -> cfg.setMode(FilterMode.byIndex(value));
+                    case DATA_REDSTONE -> cfg.setRedstone(RedstoneMode.byIndex(value));
+                    default -> cfg.setPriority(value);
+                }
             }
 
             @Override
             public int getCount() {
-                return 1;
+                return 3;
             }
         };
     }
@@ -132,25 +167,63 @@ public class EndMenu extends AbstractContainerMenu {
         return side;
     }
 
+    public boolean isInput() {
+        return input;
+    }
+
     public boolean showsFilter() {
         return showFilter;
     }
 
+    public int filterStart() {
+        return filterStart;
+    }
+
     public FilterMode mode() {
-        return FilterMode.byIndex(data.get(0));
+        return FilterMode.byIndex(data.get(DATA_MODE));
+    }
+
+    public RedstoneMode redstone() {
+        return RedstoneMode.byIndex(data.get(DATA_REDSTONE));
+    }
+
+    /** Priority, read as a signed short (the vanilla data sync sends shorts). */
+    public int priority() {
+        return (short) data.get(DATA_PRIORITY);
     }
 
     public ItemStack card() {
-        return slots.get(0).getItem();
+        return input ? slots.get(0).getItem() : ItemStack.EMPTY;
     }
 
     @Override
     public boolean clickMenuButton(Player player, int id) {
-        if (id == BTN_MODE && showFilter) {
-            data.set(0, mode().next().ordinal());
-            return true;
+        switch (id) {
+            case BTN_MODE -> {
+                if (!showFilter) {
+                    return false;
+                }
+                FilterMode next = mode().next();
+                if (!input && next == FilterMode.VOID) {
+                    next = next.next(); // Output ends never void
+                }
+                data.set(DATA_MODE, next.ordinal());
+            }
+            case BTN_REDSTONE -> {
+                if (!input) {
+                    return false;
+                }
+                data.set(DATA_REDSTONE, redstone().next().ordinal());
+            }
+            case BTN_PRIORITY_DOWN -> data.set(DATA_PRIORITY, priority() - 1);
+            case BTN_PRIORITY_UP -> data.set(DATA_PRIORITY, priority() + 1);
+            case BTN_PRIORITY_DOWN_10 -> data.set(DATA_PRIORITY, priority() - 10);
+            case BTN_PRIORITY_UP_10 -> data.set(DATA_PRIORITY, priority() + 10);
+            default -> {
+                return false;
+            }
         }
-        return false;
+        return true;
     }
 
     /** Ghost filter slots: set a single-item copy of whatever is on the cursor, or clear it. */
@@ -175,13 +248,13 @@ public class EndMenu extends AbstractContainerMenu {
         }
         ItemStack stack = slot.getItem();
         ItemStack original = stack.copy();
-        if (index == 0) {
+        if (input && index == 0) {
             // Card -> inventory
             if (!moveItemStackTo(stack, invStart, slots.size(), true)) {
                 return ItemStack.EMPTY;
             }
         } else if (index >= invStart) {
-            if (stack.getItem() instanceof UpgradeItem) {
+            if (input && stack.getItem() instanceof UpgradeItem) {
                 if (!moveItemStackTo(stack, 0, 1, false)) {
                     return ItemStack.EMPTY;
                 }
@@ -218,8 +291,9 @@ public class EndMenu extends AbstractContainerMenu {
         if (pipe == null) {
             return true;
         }
-        return !pipe.isRemoved() && pipe.has(type)
-                && pipe.mode(type.ordinal(), side) == ConnectionMode.INPUT
+        ConnectionMode now = pipe.mode(type.ordinal(), side);
+        boolean sameKind = input ? now == ConnectionMode.INPUT : now == ConnectionMode.OUTPUT;
+        return !pipe.isRemoved() && pipe.has(type) && sameKind
                 && player.distanceToSqr(pos.getX() + 0.5, pos.getY() + 0.5, pos.getZ() + 0.5) <= 64;
     }
 

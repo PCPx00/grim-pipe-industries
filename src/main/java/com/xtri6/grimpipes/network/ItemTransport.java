@@ -86,6 +86,9 @@ final class ItemTransport {
             if (sim.isEmpty()) {
                 break;
             }
+            if (!dest.accepts(sim)) {
+                continue;
+            }
             ItemStack rest = ItemHandlerHelper.insertItem(to, sim, true);
             int canMove = sim.getCount() - rest.getCount();
             if (canMove <= 0) {
@@ -135,7 +138,7 @@ final class ItemTransport {
                 continue;
             }
             IItemHandler to = dest.items();
-            if (to != null) {
+            if (to != null && dest.accepts(remaining)) {
                 remaining = ItemHandlerHelper.insertItem(to, remaining, simulate);
             }
         }

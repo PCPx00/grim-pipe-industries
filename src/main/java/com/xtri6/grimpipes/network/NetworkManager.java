@@ -249,6 +249,7 @@ public final class NetworkManager {
                 }
             }
         }
+        net.finish();
         networks.add(net);
     }
 

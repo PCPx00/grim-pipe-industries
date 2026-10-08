@@ -72,6 +72,15 @@ neoForge {
         // By default, the server will crash when no gametests are provided.
         // The gametest system is also enabled by default for other run configs under the /test command.
 
+        // DEV-ONLY-MEKCHECK-BEGIN
+        mekCheck {
+            server()
+            gameDirectory = project.file('run-mekcheck')
+            programArgument '--nogui'
+            systemProperty 'grimpipes.mekcheck', 'true'
+        }
+        // DEV-ONLY-MEKCHECK-END
+
         gameTestServer {
             type = "gameTestServer"
             systemProperty 'neoforge.enabledGameTestNamespaces', project.mod_id
@@ -123,6 +132,8 @@ configurations {
 dependencies {
     // Mekanism is optional: only its API is compiled against, and chemical code only loads when Mekanism is installed.
     compileOnly "mekanism:Mekanism:${mekanism_version}:api"
+    // Dev/test only: real Mekanism in the dev game and game tests so chemical pipes get tested in-game.
+    localRuntime "mekanism:Mekanism:${mekanism_version}"
     // Example optional mod dependency with JEI
     // The JEI API is declared for compile time use, while the full JEI artifact is used at runtime
     // compileOnly "mezz.jei:jei-${mc_version}-common-api:${jei_version}"

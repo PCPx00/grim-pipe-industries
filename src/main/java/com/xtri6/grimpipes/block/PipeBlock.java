@@ -262,21 +262,12 @@ public class PipeBlock extends BaseEntityBlock implements SimpleWaterloggedBlock
         if (part == null || part.kind() == PipeGeometry.PartKind.CORE || part.dir() == null || part.arm() == PipeKey.ARM_LINK) {
             return InteractionResult.PASS;
         }
-        if (part.arm() != PipeKey.ARM_INPUT) {
-            if (!level.isClientSide) {
-                player.displayClientMessage(Component.translatable("message.grimpipes.gui.output_end").withStyle(ChatFormatting.GRAY), true);
-            }
-            return InteractionResult.sidedSuccess(level.isClientSide);
-        }
         if (player instanceof ServerPlayer sp) {
             PipeType type = PipeType.byIndex(part.type());
             Direction side = part.dir();
             Component title = Component.translatable("item.grimpipes." + type.id() + "_pipe");
-            sp.openMenu(new SimpleMenuProvider((id, inv, p) -> new EndMenu(id, inv, be, type, side), title), buf -> {
-                buf.writeBlockPos(pos);
-                buf.writeVarInt(type.ordinal());
-                buf.writeVarInt(side.get3DDataValue());
-            });
+            sp.openMenu(new SimpleMenuProvider((id, inv, p) -> new EndMenu(id, inv, be, type, side), title),
+                    buf -> EndMenu.writeOpenData(buf, be, type, side));
         }
         return InteractionResult.sidedSuccess(level.isClientSide);
     }

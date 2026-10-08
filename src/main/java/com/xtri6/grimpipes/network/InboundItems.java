@@ -47,6 +47,9 @@ public final class InboundItems implements IItemHandler {
         if (e == null || stack.isEmpty()) {
             return stack;
         }
+        if (!e.active()) {
+            return stack; // held off by redstone
+        }
         EndConfig cfg = e.config();
         Decision decision = cfg == null ? Decision.PASS : cfg.decide(stack);
         if (decision == Decision.BLOCK) {

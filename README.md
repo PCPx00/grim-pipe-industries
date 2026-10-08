@@ -63,10 +63,16 @@ The wrench targets the exact band you click, so in a bundle you flip just the st
 
 - **Speed card slot:** drop a card in or take it out. The screen shows the exact speed that end runs at.
 - **9-slot filter:** click with an item to add it (your item is not used up), or shift-click from your inventory. Buckets filter fluids.
+- **Redstone control:** *Always on*, *Needs signal* or *Stops with signal*. Power the pipe block to switch that end on or off.
 - **Whitelist** (only pull these), **Blacklist** (pull everything except these) or **Void** (pull everything and delete what's in the filter).
 - **Three styles**, switched from the corner button: *Reaper*, *Vanilla* and *Dark*, the same as Grim Soul Industries.
 
-Machines that push on their own (hoppers, generators, auto-eject) can push straight into an Input end, and its filter still applies.
+Machines that push on their own (hoppers, generators, auto-eject) can push straight into an Input end, and its filter and redstone setting still apply.
+
+**Empty-hand right-click an Output end** to set where things go:
+
+- **Priority:** higher numbers fill first; ends with the same priority share round-robin. Shift-click the buttons for ±10.
+- **Whitelist / Blacklist filter** for items and fluids, so one line can sort diamonds into one chest and everything else into another.
 
 <p align="center"><img src="docs/gallery/08_gui.png" width="40%"></p>
 
@@ -108,7 +114,7 @@ All of these can be changed in `config/grimpipes-common.toml`.
 ## Requirements
 - Minecraft **1.21.1**
 - NeoForge **21.1.0** or newer
-- Optional: **Mekanism** 10.7+ for the Chemical Pipe (and the chemical part of the Omni Pipe)
+- Optional: **Mekanism** 10.7+ for the Chemical Pipe (and the chemical part of the Omni Pipe). Tested with real Mekanism tanks. As with Mekanism's own tubes, set the machine's side configuration to Output on the side you pull from.
 
 Needed on both client and server.
 

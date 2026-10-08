@@ -55,6 +55,9 @@ public final class InboundFluids implements IFluidHandler {
         if (e == null || resource.isEmpty()) {
             return 0;
         }
+        if (!e.active()) {
+            return 0; // held off by redstone
+        }
         EndConfig cfg = e.config();
         Decision decision = cfg == null ? Decision.PASS : cfg.decide(resource);
         if (decision == Decision.BLOCK) {

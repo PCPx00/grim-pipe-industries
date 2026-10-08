@@ -86,6 +86,30 @@ public final class Endpoint {
         return pipe.endTier(type, side);
     }
 
+    /** Input ends: whether redstone currently lets this end run. */
+    public boolean active() {
+        EndConfig cfg = config();
+        return cfg == null || cfg.redstone().allows(pipe.isPowered());
+    }
+
+    /** Output ends: higher priority is filled first. */
+    public int priority() {
+        EndConfig cfg = config();
+        return cfg == null ? 0 : cfg.priority();
+    }
+
+    /** Output ends: whether this end's filter takes the item. */
+    public boolean accepts(net.minecraft.world.item.ItemStack stack) {
+        EndConfig cfg = config();
+        return cfg == null || cfg.accepts(stack);
+    }
+
+    /** Output ends: whether this end's filter takes the fluid. */
+    public boolean accepts(net.neoforged.neoforge.fluids.FluidStack fluid) {
+        EndConfig cfg = config();
+        return cfg == null || cfg.accepts(fluid);
+    }
+
     /** This end's filter and card, or null if never configured (pulls everything). */
     @Nullable
     public EndConfig config() {

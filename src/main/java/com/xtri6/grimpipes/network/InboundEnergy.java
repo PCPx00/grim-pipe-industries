@@ -34,6 +34,9 @@ public final class InboundEnergy implements IEnergyStorage {
         if (e == null || toReceive <= 0) {
             return 0;
         }
+        if (!e.active()) {
+            return 0; // held off by redstone
+        }
         long left = e.budgetLeft(ResourceKind.ENERGY, e.level().getGameTime(), 1, e.tier().energyPerTick());
         int allowed = (int) Math.min(toReceive, left);
         if (allowed <= 0) {

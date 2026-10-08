@@ -41,6 +41,9 @@ public final class GrimPipes {
         if (net.neoforged.neoforge.gametest.GameTestHooks.isGametestEnabled()) {
             try {
                 Class.forName("com.xtri6.grimpipes.gametest.TestCaps").getMethod("register", IEventBus.class).invoke(null, modBus);
+                if (Boolean.getBoolean("grimpipes.mekcheck")) {
+                    Class.forName("com.xtri6.grimpipes.gametest.MekanismServerCheck").getMethod("register", IEventBus.class).invoke(null, modBus);
+                }
                 if (Boolean.getBoolean("grimpipes.shots")) {
                     Class.forName("com.xtri6.grimpipes.gametest.ShowcaseHook").getMethod("register", IEventBus.class).invoke(null, modBus);
                 }

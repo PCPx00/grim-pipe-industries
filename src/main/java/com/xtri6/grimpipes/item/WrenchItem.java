@@ -2,7 +2,12 @@ package com.xtri6.grimpipes.item;
 
 import java.util.List;
 
+import com.xtri6.grimpipes.Registration;
+
 import net.minecraft.ChatFormatting;
+import net.minecraft.core.BlockPos;
+import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.level.LevelReader;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
@@ -15,6 +20,15 @@ import net.minecraft.world.item.TooltipFlag;
 public class WrenchItem extends Item {
     public WrenchItem(Properties properties) {
         super(properties);
+    }
+
+    /**
+     * Minecraft normally skips a block's right-click handling while you sneak with an item in hand. Pipes need
+     * those sneak-clicks (disconnect an end, take a strand out), so let them through, but only on pipes.
+     */
+    @Override
+    public boolean doesSneakBypassUse(ItemStack stack, LevelReader level, BlockPos pos, Player player) {
+        return level.getBlockState(pos).is(Registration.PIPE.get());
     }
 
     @Override

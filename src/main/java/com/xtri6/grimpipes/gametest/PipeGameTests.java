@@ -397,6 +397,87 @@ public final class PipeGameTests {
         h.succeed();
     }
 
+    /**
+     * Clicks a pipe the way a real player does. Mirrors Minecraft's own rule in ServerPlayerGameMode#useItemOn:
+     * while sneaking with an item in hand, the block only gets the click if the item opts in with
+     * doesSneakBypassUse (which is exactly what was broken before 1.3.1).
+     */
+    private static void playerClick(GameTestHelper h, net.minecraft.world.entity.player.Player player, BlockPos rel,
+                                    double px, double py, double pz, Direction face, boolean sneak) {
+        BlockPos abs = h.absolutePos(rel);
+        player.setShiftKeyDown(sneak);
+        ItemStack held = player.getMainHandItem();
+        boolean blockGetsClick = !player.isSecondaryUseActive() || held.isEmpty()
+                || held.doesSneakBypassUse(h.getLevel(), abs, player);
+        if (blockGetsClick) {
+            Vec3 hitVec = new Vec3(abs.getX() + px / 16.0, abs.getY() + py / 16.0, abs.getZ() + pz / 16.0);
+            h.getLevel().getBlockState(abs).useItemOn(held, h.getLevel(), player, net.minecraft.world.InteractionHand.MAIN_HAND,
+                    new net.minecraft.world.phys.BlockHitResult(hitVec, face, abs, false));
+        }
+        player.setShiftKeyDown(false);
+    }
+
+    private static net.minecraft.world.entity.player.Player wrenchPlayer(GameTestHelper h) {
+        var player = h.makeMockPlayer(net.minecraft.world.level.GameType.SURVIVAL);
+        player.setItemInHand(net.minecraft.world.InteractionHand.MAIN_HAND, new ItemStack(Registration.WRENCH.get()));
+        return player;
+    }
+
+    /** Sneak-clicking a pipe end with the wrench disconnects it from that block, and stays disconnected. */
+    @GameTest(template = "empty", timeoutTicks = 200)
+    public static void sneakWrenchDisconnectsFromBlock(GameTestHelper h) {
+        Container a = chest(h, 0, 1, 0);
+        Container b = chest(h, 2, 1, 0);
+        a.setItem(0, new ItemStack(Items.COBBLESTONE, 32));
+        PipeBlockEntity p = pipe(h, 1, 1, 0, PipeType.ITEM);
+        p.setMode(PipeType.ITEM.ordinal(), Direction.WEST, ConnectionMode.INPUT);
+        var player = wrenchPlayer(h);
+
+        // Top of the west end plate (x 0-2 px, plate reaches y=12 px).
+        playerClick(h, player, new BlockPos(1, 1, 0), 1, 12, 8, Direction.UP, true);
+        h.assertTrue(p.mode(PipeType.ITEM.ordinal(), Direction.WEST) == ConnectionMode.DISABLED, "end not disconnected");
+        h.assertTrue(p.key().arm(PipeType.ITEM.ordinal(), Direction.WEST) == PipeKey.ARM_NONE, "arm still drawn to the chest");
+        int before = count(b, Items.COBBLESTONE);
+        h.runAfterDelay(60, () -> {
+            h.assertTrue(count(b, Items.COBBLESTONE) == before, "items still pulled from a disconnected block");
+            // Plain click on the core facing west reconnects it.
+            playerClick(h, player, new BlockPos(1, 1, 0), 5, 8, 8, Direction.WEST, false);
+            h.assertTrue(p.mode(PipeType.ITEM.ordinal(), Direction.WEST) == ConnectionMode.OUTPUT, "not reconnected");
+            h.assertTrue(p.key().arm(PipeType.ITEM.ordinal(), Direction.WEST) == PipeKey.ARM_OUTPUT, "arm not back");
+            h.succeed();
+        });
+    }
+
+    /** A normal (non-sneak) wrench click on an end still flips Output / Input. */
+    @GameTest(template = "empty", timeoutTicks = 40)
+    public static void wrenchClickTogglesEnd(GameTestHelper h) {
+        chest(h, 0, 1, 0);
+        PipeBlockEntity p = pipe(h, 1, 1, 0, PipeType.ITEM);
+        var player = wrenchPlayer(h);
+        playerClick(h, player, new BlockPos(1, 1, 0), 1, 12, 8, Direction.UP, false);
+        h.assertTrue(p.mode(PipeType.ITEM.ordinal(), Direction.WEST) == ConnectionMode.INPUT, "end not set to Input");
+        playerClick(h, player, new BlockPos(1, 1, 0), 1, 12, 8, Direction.UP, false);
+        h.assertTrue(p.mode(PipeType.ITEM.ordinal(), Direction.WEST) == ConnectionMode.OUTPUT, "end not back to Output");
+        h.succeed();
+    }
+
+    /** Sneak-clicking a strand's band on the core takes just that strand out and gives it back. */
+    @GameTest(template = "empty", timeoutTicks = 40)
+    public static void sneakWrenchRemovesOneStrand(GameTestHelper h) {
+        PipeBlockEntity p = pipe(h, 1, 1, 1, PipeType.ITEM, PipeType.FLUID);
+        var player = wrenchPlayer(h);
+        // Core top face is split along x: item band 5-8 px, fluid band 8-11 px.
+        playerClick(h, player, new BlockPos(1, 1, 1), 6.5, 11, 8, Direction.UP, true);
+        h.assertTrue(!p.has(PipeType.ITEM) && p.has(PipeType.FLUID), "wrong strand removed");
+        h.assertTrue(player.getInventory().countItem(Registration.pipeItem(PipeType.ITEM)) == 1, "item pipe not given back");
+        // Sneaking with the wrench must still reach the pipe (the bug this guards against).
+        h.assertTrue(new ItemStack(Registration.WRENCH.get()).doesSneakBypassUse(h.getLevel(), h.absolutePos(new BlockPos(1, 1, 1)), player),
+                "wrench does not pass sneak-clicks to pipes");
+        h.assertTrue(!new ItemStack(Registration.WRENCH.get()).doesSneakBypassUse(h.getLevel(), h.absolutePos(new BlockPos(3, 1, 3)), player),
+                "wrench should only bypass sneak on pipes");
+        h.succeed();
+    }
+
     /** Disconnecting the link between two pipes stops flow; reconnecting resumes it. */
     @GameTest(template = "empty", timeoutTicks = 400)
     public static void wrenchDisconnectAndReconnect(GameTestHelper h) {

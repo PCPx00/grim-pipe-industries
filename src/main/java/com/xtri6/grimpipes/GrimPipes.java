@@ -36,6 +36,7 @@ public final class GrimPipes {
         NeoForge.EVENT_BUS.addListener(GrimPipes::onLevelTick);
         NeoForge.EVENT_BUS.addListener(GrimPipes::onLevelUnload);
         NeoForge.EVENT_BUS.addListener(GrimPipes::onServerStopped);
+        NeoForge.EVENT_BUS.addListener(GrimPipes::onRightClickBlock);
 
         // Dev-only test fixtures; the gametest package is stripped from the release jar.
         if (net.neoforged.neoforge.gametest.GameTestHooks.isGametestEnabled()) {
@@ -77,6 +78,14 @@ public final class GrimPipes {
     private static void onLevelUnload(LevelEvent.Unload event) {
         if (event.getLevel() instanceof ServerLevel level) {
             NetworkManager.remove(level);
+        }
+    }
+
+    /** Lets other mods' wrenches (c:tools/wrench) sneak-click pipes too, like the Reaper Wrench does. */
+    private static void onRightClickBlock(net.neoforged.neoforge.event.entity.player.PlayerInteractEvent.RightClickBlock event) {
+        if (event.getEntity().isShiftKeyDown() && event.getItemStack().is(Registration.WRENCH_TAG)
+                && event.getLevel().getBlockState(event.getPos()).is(Registration.PIPE.get())) {
+            event.setUseBlock(net.neoforged.neoforge.common.util.TriState.TRUE);
         }
     }
 

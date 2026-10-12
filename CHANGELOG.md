@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.3.1 — Wrench fix
+
+- **Fixed:** sneak-clicking with the Reaper Wrench did nothing in-game, so you couldn't **disconnect a pipe end from a block you don't want it attached to**, or take a single strand out of a bundle. Minecraft skips a block's click while you sneak with an item unless the item allows it; the wrench now does, on pipes only.
+- Wrenches from other mods (`c:tools/wrench`) get the same sneak-click behavior on pipes.
+- New tests click through Minecraft's real sneak rule, so this can't silently break again.
+
 ## 1.3.0 — Redstone, priority and output filters
 
 - **Redstone control on Input ends:** Always on, Needs signal, or Stops with signal. Applies to pulling and to anything pushed into the end.

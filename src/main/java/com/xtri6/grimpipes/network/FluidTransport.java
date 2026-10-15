@@ -47,7 +47,7 @@ final class FluidTransport {
                 moved += pullFluid(net, src, from, cfg, any);
             }
         }
-        src.cursor++;
+        src.advance();
         return moved;
     }
 
@@ -67,7 +67,7 @@ final class FluidTransport {
         int remaining = available.getAmount();
         int n = net.outputs().size();
         for (int i = 0; i < n && remaining > 0; i++) {
-            Endpoint dest = net.outputAt(src.cursor, i);
+            Endpoint dest = src.dest(i);
             if (dest.target().equals(src.target())) {
                 continue;
             }

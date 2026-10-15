@@ -35,3 +35,10 @@ pipes from Hollow to Soulforged.
     versionRange="[10.7,)"
     ordering="NONE"
     side="BOTH"
+
+[[dependencies.${mod_id}]]
+    modId="grimsoul"
+    type="optional"
+    versionRange="*"
+    ordering="NONE"
+    side="BOTH"

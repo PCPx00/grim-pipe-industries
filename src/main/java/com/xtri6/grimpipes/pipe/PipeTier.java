@@ -52,26 +52,31 @@ public enum PipeTier {
 
     /** Items moved per operation from one Input end. */
     public int itemsPerOperation() {
-        return Config.ITEMS_PER_OP.get(ordinal()).get();
+        int s = SyncedRates.get(ordinal(), 0);
+        return s >= 0 ? s : Config.ITEMS_PER_OP.get(ordinal()).get();
     }
 
     /** Ticks between item operations on one Input end. */
     public int itemInterval() {
-        return Config.ITEM_INTERVAL.get(ordinal()).get();
+        int s = SyncedRates.get(ordinal(), 1);
+        return s >= 0 ? s : Config.ITEM_INTERVAL.get(ordinal()).get();
     }
 
     /** Fluid moved per tick (mB) by one end. */
     public int fluidPerTick() {
-        return Config.FLUID_RATE.get(ordinal()).get();
+        int s = SyncedRates.get(ordinal(), 2);
+        return s >= 0 ? s : Config.FLUID_RATE.get(ordinal()).get();
     }
 
     /** Energy moved per tick (FE) by one end. */
     public int energyPerTick() {
-        return Config.ENERGY_RATE.get(ordinal()).get();
+        int s = SyncedRates.get(ordinal(), 3);
+        return s >= 0 ? s : Config.ENERGY_RATE.get(ordinal()).get();
     }
 
     /** Chemical moved per tick (mB) by one end. */
     public long chemicalPerTick() {
-        return Config.CHEMICAL_RATE.get(ordinal()).get();
+        int s = SyncedRates.get(ordinal(), 4);
+        return s >= 0 ? s : Config.CHEMICAL_RATE.get(ordinal()).get();
     }
 }

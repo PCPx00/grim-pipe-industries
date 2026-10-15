@@ -45,6 +45,7 @@ import net.neoforged.neoforge.items.IItemHandler;
  */
 public class PipeBlockEntity extends BlockEntity {
     public static final ModelProperty<PipeKey> MODEL_KEY = new ModelProperty<>();
+    public static final ModelProperty<BlockState> MODEL_FACADE = new ModelProperty<>();
     private static final int SLOTS = PipeType.COUNT * 6;
 
     private int typeMask;
@@ -52,6 +53,12 @@ public class PipeBlockEntity extends BlockEntity {
     private final EndConfig[] ends = new EndConfig[SLOTS];
     private PipeKey key = PipeKey.EMPTY;
     private boolean powered;
+    /** Block this pipe is disguised as, or null. */
+    @Nullable
+    private BlockState facade;
+    /** The other end of this pipe's Soul Link, or null. */
+    @Nullable
+    private BlockPos soulLink;
 
     // ---- Server-only runtime state (never saved) ----
     private final Endpoint[] endpoints = new Endpoint[SLOTS];
@@ -135,6 +142,59 @@ public class PipeBlockEntity extends BlockEntity {
         return powered;
     }
 
+    @Nullable
+    public BlockState facade() {
+        return facade;
+    }
+
+    /** Hides the pipe inside a full block. Pass null to show it again. */
+    public void setFacade(@Nullable BlockState state) {
+        facade = state;
+        setChanged();
+        if (level instanceof ServerLevel) {
+            recomputeKey(true);
+            level.updateNeighborsAt(worldPosition, getBlockState().getBlock());
+        }
+    }
+
+    @Nullable
+    public BlockPos soulLink() {
+        return soulLink;
+    }
+
+    /** Joins this pipe's network to another pipe's, wirelessly. Pass null to unlink. */
+    public void setSoulLink(@Nullable BlockPos partner) {
+        if (java.util.Objects.equals(partner, soulLink)) {
+            return;
+        }
+        BlockPos old = soulLink;
+        soulLink = partner == null ? null : partner.immutable();
+        setChanged();
+        if (level instanceof ServerLevel server) {
+            NetworkManager manager = NetworkManager.get(server);
+            manager.invalidate(worldPosition);
+            if (old != null && server.isLoaded(old)) {
+                manager.invalidate(old);
+            }
+            if (soulLink != null && server.isLoaded(soulLink)) {
+                manager.invalidate(soulLink);
+            }
+            BlockState state = getBlockState();
+            server.sendBlockUpdated(worldPosition, state, state, Block.UPDATE_CLIENTS);
+        }
+    }
+
+    /** Switches the flow animation of one strand (set by the network once a second, only when it changes). */
+    public void setFlowing(int type, boolean flowing) {
+        int mask = key.flowMask();
+        int next = flowing ? mask | (1 << type) : mask & ~(1 << type);
+        if (next != mask && level instanceof ServerLevel server) {
+            key = key.withFlow(next);
+            BlockState state = getBlockState();
+            server.sendBlockUpdated(worldPosition, state, state, Block.UPDATE_CLIENTS);
+        }
+    }
+
     public List<PipeType> types() {
         List<PipeType> list = new ArrayList<>();
         for (PipeType t : PipeType.VALUES) {
@@ -202,6 +262,9 @@ public class PipeBlockEntity extends BlockEntity {
         for (PipeType t : types()) {
             drops.add(new ItemStack(Registration.pipeItem(t)));
         }
+        if (facade != null) {
+            drops.add(new ItemStack(facade.getBlock()));
+        }
         for (int t = 0; t < PipeType.COUNT; t++) {
             if ((typeMask & (1 << t)) == 0) {
                 continue;
@@ -252,7 +315,7 @@ public class PipeBlockEntity extends BlockEntity {
                 }
             }
         }
-        PipeKey.Builder b = new PipeKey.Builder().types(typeMask);
+        PipeKey.Builder b = new PipeKey.Builder().types(typeMask).flow(key.flowMask() & typeMask).facade(facade != null);
         for (Direction d : Direction.values()) {
             BlockPos np = worldPosition.relative(d);
             boolean loaded = server.isLoaded(np);
@@ -420,6 +483,17 @@ public class PipeBlockEntity extends BlockEntity {
         tag.putLong("KeyB", key.b());
         tag.putLong("KeyC", key.c());
         tag.putLong("KeyD", key.d());
+        writeShared(tag);
+        if (soulLink != null) {
+            tag.putLong("SoulLink", soulLink.asLong());
+        }
+    }
+
+    /** Facade, needed by both the server and clients. */
+    private void writeShared(CompoundTag tag) {
+        if (facade != null) {
+            tag.put("Facade", net.minecraft.nbt.NbtUtils.writeBlockState(facade));
+        }
     }
 
     @Override
@@ -439,8 +513,20 @@ public class PipeBlockEntity extends BlockEntity {
                 ends[i] = null;
             }
         }
+        BlockState oldFacade = facade;
+        facade = tag.contains("Facade")
+                ? net.minecraft.nbt.NbtUtils.readBlockState(registries.lookupOrThrow(net.minecraft.core.registries.Registries.BLOCK), tag.getCompound("Facade"))
+                : null;
+        if (facade != null && facade.isAir()) {
+            facade = null;
+        }
+        if (!tag.getBoolean("SyncOnly")) {
+            soulLink = tag.contains("SoulLink") ? BlockPos.of(tag.getLong("SoulLink")) : null;
+        } else {
+            linkedOnClient = tag.getBoolean("Linked");
+        }
         PipeKey loaded = new PipeKey(tag.getLong("KeyA"), tag.getLong("KeyB"), tag.getLong("KeyC"), tag.getLong("KeyD"));
-        boolean changed = !loaded.equals(key);
+        boolean changed = !loaded.equals(key) || oldFacade != facade;
         key = loaded;
         if (changed && level != null && level.isClientSide) {
             requestModelDataUpdate();
@@ -460,6 +546,8 @@ public class PipeBlockEntity extends BlockEntity {
         tag.putLong("KeyC", key.c());
         tag.putLong("KeyD", key.d());
         tag.putBoolean("SyncOnly", true);
+        tag.putBoolean("Linked", soulLink != null);
+        writeShared(tag);
         return tag;
     }
 
@@ -470,7 +558,14 @@ public class PipeBlockEntity extends BlockEntity {
 
     @Override
     public ModelData getModelData() {
-        return ModelData.of(MODEL_KEY, key);
+        return ModelData.builder().with(MODEL_KEY, key).with(MODEL_FACADE, facade).build();
+    }
+
+    /** Client side: whether this pipe has a Soul Link (for tooltips). */
+    private boolean linkedOnClient;
+
+    public boolean hasSoulLink() {
+        return soulLink != null || linkedOnClient;
     }
 
     @Nullable

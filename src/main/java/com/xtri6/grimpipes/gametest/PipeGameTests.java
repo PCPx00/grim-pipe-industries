@@ -591,4 +591,249 @@ public final class PipeGameTests {
             h.assertTrue(avg < 1_000_000, "pipe logic too slow: " + avg / 1000 + " us/tick");
         });
     }
+
+    // ---- 1.4.0 ----
+
+    /** Input pipe at (1,1,1) pulling chest (0,1,1); a pipe line to x=5; a near chest at (2,1,2) and a far one at (5,1,2). */
+    private static Container[] nearFarSetup(GameTestHelper h, com.xtri6.grimpipes.pipe.Distribution dist, int sticks) {
+        Container a = chest(h, 0, 1, 1);
+        Container near = chest(h, 2, 1, 2);
+        Container far = chest(h, 5, 1, 2);
+        a.setItem(0, new ItemStack(Items.STICK, sticks));
+        PipeBlockEntity in = pipe(h, 1, 1, 1, PipeType.ITEM);
+        for (int x = 2; x <= 5; x++) {
+            pipe(h, x, 1, 1, PipeType.ITEM);
+        }
+        in.setMode(PipeType.ITEM.ordinal(), Direction.WEST, ConnectionMode.INPUT);
+        in.endConfig(PipeType.ITEM.ordinal(), Direction.WEST).setDistribution(dist);
+        return new Container[]{a, near, far};
+    }
+
+    @GameTest(template = "empty", timeoutTicks = 300)
+    public static void nearestFirstFillsClosest(GameTestHelper h) {
+        Container[] c = nearFarSetup(h, com.xtri6.grimpipes.pipe.Distribution.NEAREST, 32);
+        h.succeedWhen(() -> {
+            h.assertTrue(count(c[1], Items.STICK) == 32, "near chest has " + count(c[1], Items.STICK));
+            h.assertTrue(count(c[2], Items.STICK) == 0, "far chest got " + count(c[2], Items.STICK));
+        });
+    }
+
+    @GameTest(template = "empty", timeoutTicks = 400)
+    public static void randomReachesEveryOutput(GameTestHelper h) {
+        Container[] c = nearFarSetup(h, com.xtri6.grimpipes.pipe.Distribution.RANDOM, 64);
+        h.succeedWhen(() -> {
+            int near = count(c[1], Items.STICK);
+            int far = count(c[2], Items.STICK);
+            h.assertTrue(near + far == 64, "moved " + (near + far));
+            h.assertTrue(near > 0 && far > 0, "random never picked one side: " + near + " / " + far);
+        });
+    }
+
+    private static ItemStack tagFilter(String rules) {
+        ItemStack f = new ItemStack(Registration.TAG_FILTER.get());
+        com.xtri6.grimpipes.item.TagFilterItem.setPatterns(f, rules);
+        return f;
+    }
+
+    @GameTest(template = "empty", timeoutTicks = 200)
+    public static void tagFilterPullsByTag(GameTestHelper h) {
+        Container a = chest(h, 0, 1, 0);
+        Container b = chest(h, 2, 1, 0);
+        a.setItem(0, new ItemStack(Items.IRON_INGOT, 16));
+        a.setItem(1, new ItemStack(Items.COBBLESTONE, 16));
+        a.setItem(2, new ItemStack(Items.GOLD_INGOT, 8));
+        PipeBlockEntity p = pipe(h, 1, 1, 0, PipeType.ITEM);
+        p.setMode(PipeType.ITEM.ordinal(), Direction.WEST, ConnectionMode.INPUT);
+        EndConfig cfg = p.endConfig(PipeType.ITEM.ordinal(), Direction.WEST);
+        cfg.setMode(FilterMode.WHITELIST);
+        cfg.filter.setStackInSlot(0, tagFilter("#c:ingots"));
+        h.succeedWhen(() -> {
+            h.assertTrue(count(b, Items.IRON_INGOT) == 16 && count(b, Items.GOLD_INGOT) == 8, "ingots not all moved");
+            h.assertTrue(count(b, Items.COBBLESTONE) == 0, "cobblestone got through a #c:ingots whitelist");
+        });
+    }
+
+    @GameTest(template = "empty", timeoutTicks = 200)
+    public static void tagFilterGlobAndMod(GameTestHelper h) {
+        Container a = chest(h, 0, 1, 0);
+        Container b = chest(h, 2, 1, 0);
+        a.setItem(0, new ItemStack(Items.OAK_LOG, 8));
+        a.setItem(1, new ItemStack(Items.BIRCH_LOG, 8));
+        a.setItem(2, new ItemStack(Items.STICK, 8));
+        PipeBlockEntity p = pipe(h, 1, 1, 0, PipeType.ITEM);
+        p.setMode(PipeType.ITEM.ordinal(), Direction.WEST, ConnectionMode.INPUT);
+        EndConfig cfg = p.endConfig(PipeType.ITEM.ordinal(), Direction.WEST);
+        cfg.setMode(FilterMode.BLACKLIST);
+        cfg.filter.setStackInSlot(0, tagFilter("*_log"));
+        // Rule parsing on its own: a mod rule and a fluid tag.
+        h.assertTrue(com.xtri6.grimpipes.item.TagFilterItem.matches(tagFilter("@minecraft"), new ItemStack(Items.DIRT)), "@minecraft");
+        h.assertTrue(!com.xtri6.grimpipes.item.TagFilterItem.matches(tagFilter("@mekanism"), new ItemStack(Items.DIRT)), "@mekanism");
+        h.assertTrue(com.xtri6.grimpipes.item.TagFilterItem.matches(tagFilter("#minecraft:water"),
+                new net.neoforged.neoforge.fluids.FluidStack(net.minecraft.world.level.material.Fluids.WATER, 100)), "#minecraft:water fluid");
+        h.succeedWhen(() -> {
+            h.assertTrue(count(b, Items.STICK) == 8, "sticks not moved");
+            h.assertTrue(count(b, Items.OAK_LOG) == 0 && count(b, Items.BIRCH_LOG) == 0, "logs got past a *_log blacklist");
+        });
+    }
+
+    @GameTest(template = "empty", timeoutTicks = 200)
+    public static void exactMatchChecksComponents(GameTestHelper h) {
+        Container a = chest(h, 0, 1, 0);
+        Container b = chest(h, 2, 1, 0);
+        ItemStack worn = new ItemStack(Items.DIAMOND_SWORD);
+        worn.setDamageValue(100);
+        a.setItem(0, new ItemStack(Items.DIAMOND_SWORD));
+        a.setItem(1, worn);
+        PipeBlockEntity p = pipe(h, 1, 1, 0, PipeType.ITEM);
+        p.setMode(PipeType.ITEM.ordinal(), Direction.WEST, ConnectionMode.INPUT);
+        EndConfig cfg = p.endConfig(PipeType.ITEM.ordinal(), Direction.WEST);
+        cfg.setMode(FilterMode.WHITELIST);
+        cfg.filter.setStackInSlot(0, new ItemStack(Items.DIAMOND_SWORD));
+        cfg.setMatchComponents(true);
+        h.runAfterDelay(60, () -> {
+            h.assertTrue(count(b, Items.DIAMOND_SWORD) == 1, "B has " + count(b, Items.DIAMOND_SWORD) + " swords");
+            h.assertTrue(!b.getItem(0).isDamaged(), "the worn sword moved");
+            cfg.setMatchComponents(false);
+            h.succeedWhen(() -> h.assertTrue(count(b, Items.DIAMOND_SWORD) == 2, "worn sword not moved with exact match off"));
+        });
+    }
+
+    @GameTest(template = "empty", timeoutTicks = 100)
+    public static void imprintCopiesAndPastes(GameTestHelper h) {
+        chest(h, 0, 1, 0);
+        chest(h, 0, 1, 2);
+        PipeBlockEntity from = pipe(h, 1, 1, 0, PipeType.ITEM);
+        PipeBlockEntity to = pipe(h, 1, 1, 2, PipeType.ITEM);
+        int t = PipeType.ITEM.ordinal();
+        from.setMode(t, Direction.WEST, ConnectionMode.INPUT);
+        card(from, PipeType.ITEM, Direction.WEST, PipeTier.RESTLESS);
+        filter(from, PipeType.ITEM, Direction.WEST, FilterMode.WHITELIST, Items.STICK, Items.DIAMOND);
+        from.endConfig(t, Direction.WEST).setRedstone(com.xtri6.grimpipes.pipe.RedstoneMode.HIGH);
+        from.endConfig(t, Direction.WEST).setDistribution(com.xtri6.grimpipes.pipe.Distribution.NEAREST);
+
+        var player = h.makeMockPlayer(net.minecraft.world.level.GameType.SURVIVAL);
+        ItemStack imprint = new ItemStack(Registration.IMPRINT.get());
+        player.setShiftKeyDown(true);
+        com.xtri6.grimpipes.item.ImprintItem.use(imprint, from,
+                new PipeGeometry.Hit(PipeGeometry.PartKind.TIP, Direction.WEST, t, PipeKey.ARM_INPUT), player);
+        player.setShiftKeyDown(false);
+        com.xtri6.grimpipes.item.ImprintItem.use(imprint, to,
+                new PipeGeometry.Hit(PipeGeometry.PartKind.TIP, Direction.WEST, t, PipeKey.ARM_OUTPUT), player);
+
+        EndConfig pasted = to.endConfig(t, Direction.WEST);
+        h.assertTrue(to.mode(t, Direction.WEST) == ConnectionMode.INPUT, "mode not pasted");
+        h.assertTrue(pasted.mode() == FilterMode.WHITELIST, "filter mode not pasted");
+        h.assertTrue(pasted.filter.getStackInSlot(1).is(Items.DIAMOND), "filter not pasted");
+        h.assertTrue(pasted.redstone() == com.xtri6.grimpipes.pipe.RedstoneMode.HIGH, "redstone not pasted");
+        h.assertTrue(pasted.distribution() == com.xtri6.grimpipes.pipe.Distribution.NEAREST, "distribution not pasted");
+        h.assertTrue(pasted.tier() == PipeTier.HOLLOW, "speed card was copied");
+        h.succeed();
+    }
+
+    @GameTest(template = "empty", timeoutTicks = 300)
+    public static void soulLinkJoinsNetworks(GameTestHelper h) {
+        Container a = chest(h, 0, 1, 1);
+        Container b = chest(h, 6, 1, 1);
+        a.setItem(0, new ItemStack(Items.STICK, 32));
+        PipeBlockEntity left = pipe(h, 1, 1, 1, PipeType.ITEM);
+        PipeBlockEntity right = pipe(h, 5, 1, 1, PipeType.ITEM);
+        left.setMode(PipeType.ITEM.ordinal(), Direction.WEST, ConnectionMode.INPUT);
+        card(left, PipeType.ITEM, Direction.WEST, PipeTier.RESTLESS);
+
+        var player = h.makeMockPlayer(net.minecraft.world.level.GameType.SURVIVAL);
+        ItemStack link = new ItemStack(Registration.SOUL_LINK.get());
+        h.runAfterDelay(20, () -> {
+            h.assertTrue(count(b, Items.STICK) == 0, "moved before linking");
+            com.xtri6.grimpipes.item.SoulLinkItem.use(link, left, player);
+            com.xtri6.grimpipes.item.SoulLinkItem.use(link, right, player);
+            h.assertTrue(h.absolutePos(new BlockPos(5, 1, 1)).equals(left.soulLink()), "left not linked");
+            h.succeedWhen(() -> h.assertTrue(count(b, Items.STICK) == 32, "B has " + count(b, Items.STICK)));
+        });
+    }
+
+    /** A click through Minecraft's real rules, including the RightClickBlock event and the sneak rule. */
+    private static void realClick(GameTestHelper h, net.minecraft.world.entity.player.Player player, BlockPos rel, Direction face, boolean sneak) {
+        BlockPos abs = h.absolutePos(rel);
+        player.setShiftKeyDown(sneak);
+        var hit = new net.minecraft.world.phys.BlockHitResult(abs.getCenter().relative(face, 0.5), face, abs, false);
+        var event = net.neoforged.neoforge.common.CommonHooks.onRightClickBlock(player, net.minecraft.world.InteractionHand.MAIN_HAND, abs, hit);
+        ItemStack held = player.getMainHandItem();
+        boolean skip = player.isSecondaryUseActive() && !held.isEmpty() && !held.doesSneakBypassUse(h.getLevel(), abs, player);
+        if (!event.isCanceled() && (event.getUseBlock().isTrue() || (event.getUseBlock().isDefault() && !skip))) {
+            h.getLevel().getBlockState(abs).useItemOn(held, h.getLevel(), player, net.minecraft.world.InteractionHand.MAIN_HAND, hit);
+        }
+        player.setShiftKeyDown(false);
+    }
+
+    @GameTest(template = "empty", timeoutTicks = 300)
+    public static void facadeHidesPipeAndKeepsWorking(GameTestHelper h) {
+        Container a = chest(h, 0, 1, 0);
+        Container b = chest(h, 3, 1, 0);
+        a.setItem(0, new ItemStack(Items.STICK, 16));
+        PipeBlockEntity p1 = pipe(h, 1, 1, 0, PipeType.ITEM);
+        PipeBlockEntity p2 = pipe(h, 2, 1, 0, PipeType.ITEM);
+        p1.setMode(PipeType.ITEM.ordinal(), Direction.WEST, ConnectionMode.INPUT);
+
+        var player = h.makeMockPlayer(net.minecraft.world.level.GameType.SURVIVAL);
+        player.setItemInHand(net.minecraft.world.InteractionHand.MAIN_HAND, new ItemStack(Items.STONE_BRICKS, 3));
+        realClick(h, player, new BlockPos(2, 1, 0), Direction.UP, true);
+        h.assertTrue(p2.facade() != null && p2.facade().is(Blocks.STONE_BRICKS), "facade not applied");
+        h.assertTrue(player.getMainHandItem().getCount() == 2, "facade block not used up");
+        h.assertTrue(PipeGeometry.shape(p2.key()) == net.minecraft.world.phys.shapes.Shapes.block(), "hidden pipe is not a full block");
+        // A normal click with a block still places blocks as usual (not a facade).
+        realClick(h, player, new BlockPos(1, 1, 0), Direction.UP, false);
+        h.assertTrue(p1.facade() == null, "a plain click turned a pipe into a facade");
+
+        h.succeedWhen(() -> {
+            h.assertTrue(count(b, Items.STICK) == 16, "items stopped flowing through the hidden pipe");
+            player.setItemInHand(net.minecraft.world.InteractionHand.MAIN_HAND, new ItemStack(Registration.WRENCH.get()));
+            realClick(h, player, new BlockPos(2, 1, 0), Direction.UP, false);
+            h.assertTrue(p2.facade() == null, "wrench did not remove the facade");
+            h.assertTrue(player.getInventory().countItem(Items.STONE_BRICKS) >= 1, "facade block not given back");
+        });
+    }
+
+    @GameTest(template = "empty", timeoutTicks = 400)
+    public static void flowAnimationFollowsActivity(GameTestHelper h) {
+        Container a = chest(h, 0, 1, 0);
+        chest(h, 3, 1, 0);
+        a.setItem(0, new ItemStack(Items.STICK, 64));
+        PipeBlockEntity p1 = pipe(h, 1, 1, 0, PipeType.ITEM);
+        PipeBlockEntity p2 = pipe(h, 2, 1, 0, PipeType.ITEM);
+        p1.setMode(PipeType.ITEM.ordinal(), Direction.WEST, ConnectionMode.INPUT);
+        int t = PipeType.ITEM.ordinal();
+        h.runAfterDelay(30, () -> {
+            h.assertTrue(p1.key().flowing(t) && p2.key().flowing(t), "no flow while moving");
+            // Stop it: the source is emptied, so the line goes idle and the animation must switch off.
+            a.clearContent();
+            h.succeedWhen(() -> h.assertTrue(!p1.key().flowing(t) && !p2.key().flowing(t), "still flowing while idle"));
+        });
+    }
+
+    @GameTest(template = "empty", timeoutTicks = 40)
+    public static void overviewToggleSwitchesEnd(GameTestHelper h) {
+        chest(h, 0, 1, 0);
+        PipeBlockEntity p = pipe(h, 1, 1, 0, PipeType.ITEM, PipeType.FLUID);
+        var player = h.makeMockPlayer(net.minecraft.world.level.GameType.SURVIVAL);
+        com.xtri6.grimpipes.block.PipeBlock.toggleEnd(p, player, PipeType.ITEM.ordinal(), Direction.WEST);
+        h.assertTrue(p.mode(PipeType.ITEM.ordinal(), Direction.WEST) == ConnectionMode.INPUT, "not switched to Input");
+        h.assertTrue(p.mode(PipeType.FLUID.ordinal(), Direction.WEST) == ConnectionMode.OUTPUT, "the other strand changed");
+        // Links and empty sides are left alone.
+        com.xtri6.grimpipes.block.PipeBlock.toggleEnd(p, player, PipeType.ITEM.ordinal(), Direction.UP);
+        h.assertTrue(p.mode(PipeType.ITEM.ordinal(), Direction.UP) == ConnectionMode.OUTPUT, "an empty side was changed");
+        h.succeed();
+    }
+
+    @GameTest(template = "empty", timeoutTicks = 20)
+    public static void syncedRatesOverrideLocalConfig(GameTestHelper h) {
+        int[] rates = com.xtri6.grimpipes.pipe.SyncedRates.fromConfig();
+        int before = PipeTier.HOLLOW.itemsPerOperation();
+        rates[0] = before + 3;
+        com.xtri6.grimpipes.pipe.SyncedRates.apply(rates);
+        int synced = PipeTier.HOLLOW.itemsPerOperation();
+        com.xtri6.grimpipes.pipe.SyncedRates.clear();
+        h.assertTrue(synced == before + 3, "synced speed not used: " + synced);
+        h.assertTrue(PipeTier.HOLLOW.itemsPerOperation() == before, "config not restored");
+        h.succeed();
+    }
 }

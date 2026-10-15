@@ -5,14 +5,22 @@ import java.util.Map;
 
 import com.xtri6.grimpipes.block.PipeBlock;
 import com.xtri6.grimpipes.block.PipeBlockEntity;
+import com.xtri6.grimpipes.item.FieldGuideItem;
+import com.xtri6.grimpipes.item.ImprintItem;
 import com.xtri6.grimpipes.item.PipeItem;
+import com.xtri6.grimpipes.item.SoulLinkItem;
+import com.xtri6.grimpipes.item.TagFilterItem;
 import com.xtri6.grimpipes.item.UpgradeItem;
 import com.xtri6.grimpipes.item.WrenchItem;
 import com.xtri6.grimpipes.menu.EndMenu;
 import com.xtri6.grimpipes.pipe.PipeTier;
 import com.xtri6.grimpipes.pipe.PipeType;
 
+import com.mojang.serialization.Codec;
+
+import net.minecraft.core.component.DataComponentType;
 import net.minecraft.core.registries.Registries;
+import net.minecraft.network.codec.ByteBufCodecs;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.tags.TagKey;
@@ -39,6 +47,7 @@ public final class Registration {
     public static final DeferredRegister.Items ITEMS = DeferredRegister.createItems(MODID);
     public static final DeferredRegister<BlockEntityType<?>> BLOCK_ENTITIES = DeferredRegister.create(Registries.BLOCK_ENTITY_TYPE, MODID);
     public static final DeferredRegister<MenuType<?>> MENUS = DeferredRegister.create(Registries.MENU, MODID);
+    public static final DeferredRegister.DataComponents COMPONENTS = DeferredRegister.createDataComponents(MODID);
     public static final DeferredRegister<CreativeModeTab> TABS = DeferredRegister.create(Registries.CREATIVE_MODE_TAB, MODID);
 
     /** Tag other mods use for their wrenches; any wrench in it can configure Reaper pipes. */
@@ -81,6 +90,15 @@ public final class Registration {
 
     public static final DeferredItem<WrenchItem> WRENCH = ITEMS.register("reaper_wrench", () -> new WrenchItem(new Item.Properties().stacksTo(1)));
 
+    /** Rules of a Tag Filter, e.g. "#c:ingots, @mekanism". */
+    public static final DeferredHolder<DataComponentType<?>, DataComponentType<String>> FILTER_PATTERNS =
+            COMPONENTS.registerComponentType("filter_patterns", b -> b.persistent(Codec.STRING).networkSynchronized(ByteBufCodecs.STRING_UTF8));
+
+    public static final DeferredItem<TagFilterItem> TAG_FILTER = ITEMS.register("tag_filter", () -> new TagFilterItem(new Item.Properties()));
+    public static final DeferredItem<ImprintItem> IMPRINT = ITEMS.register("reaper_imprint", () -> new ImprintItem(new Item.Properties().stacksTo(1)));
+    public static final DeferredItem<SoulLinkItem> SOUL_LINK = ITEMS.register("soul_link", () -> new SoulLinkItem(new Item.Properties().stacksTo(1)));
+    public static final DeferredItem<FieldGuideItem> FIELD_GUIDE = ITEMS.register("field_guide", () -> new FieldGuideItem(new Item.Properties().stacksTo(1)));
+
     public static final DeferredHolder<CreativeModeTab, CreativeModeTab> TAB = TABS.register("main", () -> CreativeModeTab.builder()
             .title(Component.translatable("itemGroup.grimpipes"))
             .icon(() -> PIPE_ITEMS.get(PipeType.OMNI).get().getDefaultInstance())
@@ -89,6 +107,10 @@ public final class Registration {
                     output.accept(PIPE_ITEMS.get(type).get());
                 }
                 output.accept(WRENCH.get());
+                output.accept(TAG_FILTER.get());
+                output.accept(IMPRINT.get());
+                output.accept(SOUL_LINK.get());
+                output.accept(FIELD_GUIDE.get());
                 for (PipeTier tier : PipeTier.VALUES) {
                     if (tier != PipeTier.HOLLOW) {
                         output.accept(UPGRADES.get(tier).get());
@@ -106,6 +128,7 @@ public final class Registration {
         ITEMS.register(bus);
         BLOCK_ENTITIES.register(bus);
         MENUS.register(bus);
+        COMPONENTS.register(bus);
         TABS.register(bus);
     }
 

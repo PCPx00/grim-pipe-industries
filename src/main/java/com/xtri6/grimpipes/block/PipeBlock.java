@@ -6,7 +6,9 @@ import org.jetbrains.annotations.Nullable;
 
 import com.mojang.serialization.MapCodec;
 import com.xtri6.grimpipes.Registration;
+import com.xtri6.grimpipes.item.ImprintItem;
 import com.xtri6.grimpipes.item.PipeItem;
+import com.xtri6.grimpipes.item.SoulLinkItem;
 import com.xtri6.grimpipes.item.UpgradeItem;
 import com.xtri6.grimpipes.menu.EndMenu;
 import com.xtri6.grimpipes.pipe.ConnectionMode;
@@ -173,8 +175,9 @@ public class PipeBlock extends BaseEntityBlock implements SimpleWaterloggedBlock
         return new ItemStack(Registration.pipeItem(PipeType.ITEM));
     }
 
+    /** The strand part at a world-space hit point, or null. */
     @Nullable
-    private static PipeGeometry.Hit pick(PipeBlockEntity be, BlockPos pos, Vec3 worldHit) {
+    public static PipeGeometry.Hit pick(PipeBlockEntity be, BlockPos pos, Vec3 worldHit) {
         Vec3 local = worldHit.subtract(pos.getX(), pos.getY(), pos.getZ()).scale(16);
         return PipeGeometry.pick(be.key(), local);
     }
@@ -190,6 +193,50 @@ public class PipeBlock extends BaseEntityBlock implements SimpleWaterloggedBlock
                                               InteractionHand hand, BlockHitResult hit) {
         if (!(level.getBlockEntity(pos) instanceof PipeBlockEntity be)) {
             return ItemInteractionResult.PASS_TO_DEFAULT_BLOCK_INTERACTION;
+        }
+
+        // A disguised pipe: the wrench takes the facade off, everything else leaves it alone.
+        if (be.facade() != null) {
+            if (isWrench(stack)) {
+                if (!level.isClientSide) {
+                    removeFacade(be, level, pos, player);
+                }
+                return ItemInteractionResult.sidedSuccess(level.isClientSide);
+            }
+            return ItemInteractionResult.PASS_TO_DEFAULT_BLOCK_INTERACTION;
+        }
+
+        // Sneak-click with a full block: hide the pipe inside it.
+        if (player.isShiftKeyDown() && stack.getItem() instanceof net.minecraft.world.item.BlockItem blockItem
+                && !(stack.getItem() instanceof PipeItem)) {
+            BlockState disguise = blockItem.getBlock().defaultBlockState();
+            if (!canBeFacade(disguise, level, pos)) {
+                return ItemInteractionResult.PASS_TO_DEFAULT_BLOCK_INTERACTION;
+            }
+            if (!level.isClientSide) {
+                be.setFacade(disguise);
+                stack.consume(1, player);
+                net.minecraft.world.level.block.SoundType sound = disguise.getSoundType();
+                level.playSound(null, pos, sound.getPlaceSound(), SoundSource.BLOCKS, (sound.getVolume() + 1f) / 2f, sound.getPitch() * 0.8f);
+            }
+            return ItemInteractionResult.sidedSuccess(level.isClientSide);
+        }
+
+        // Copy and paste end settings.
+        if (stack.getItem() instanceof ImprintItem) {
+            if (!level.isClientSide) {
+                PipeGeometry.Hit part = pick(be, pos, hit.getLocation());
+                ImprintItem.use(stack, be, part, player);
+            }
+            return ItemInteractionResult.sidedSuccess(level.isClientSide);
+        }
+
+        // Wireless link between two pipes.
+        if (stack.getItem() instanceof SoulLinkItem) {
+            if (!level.isClientSide) {
+                SoulLinkItem.use(stack, be, player);
+            }
+            return ItemInteractionResult.sidedSuccess(level.isClientSide);
         }
 
         // Add another strand into this block.
@@ -258,18 +305,89 @@ public class PipeBlock extends BaseEntityBlock implements SimpleWaterloggedBlock
         if (!(level.getBlockEntity(pos) instanceof PipeBlockEntity be)) {
             return InteractionResult.PASS;
         }
-        PipeGeometry.Hit part = pick(be, pos, hit.getLocation());
-        if (part == null || part.kind() == PipeGeometry.PartKind.CORE || part.dir() == null || part.arm() == PipeKey.ARM_LINK) {
-            return InteractionResult.PASS;
+        PipeGeometry.Hit part = be.facade() == null ? pick(be, pos, hit.getLocation()) : null;
+        boolean onEnd = part != null && part.kind() != PipeGeometry.PartKind.CORE && part.dir() != null && part.arm() != PipeKey.ARM_LINK;
+        // Sneaking, a core, or a disguised pipe: the screen with every end of this block.
+        if (player.isShiftKeyDown() || !onEnd) {
+            if (level.isClientSide) {
+                com.xtri6.grimpipes.client.ClientHooks.openOverview(pos);
+            }
+            return InteractionResult.sidedSuccess(level.isClientSide);
         }
         if (player instanceof ServerPlayer sp) {
-            PipeType type = PipeType.byIndex(part.type());
-            Direction side = part.dir();
-            Component title = Component.translatable("item.grimpipes." + type.id() + "_pipe");
-            sp.openMenu(new SimpleMenuProvider((id, inv, p) -> new EndMenu(id, inv, be, type, side), title),
-                    buf -> EndMenu.writeOpenData(buf, be, type, side));
+            openEnd(sp, be, PipeType.byIndex(part.type()), part.dir());
         }
         return InteractionResult.sidedSuccess(level.isClientSide);
+    }
+
+    /** Opens the settings screen of one end, if it is an Input or Output end. */
+    public static void openEnd(ServerPlayer player, PipeBlockEntity be, PipeType type, Direction side) {
+        int arm = be.key().arm(type.ordinal(), side);
+        if (arm != PipeKey.ARM_INPUT && arm != PipeKey.ARM_OUTPUT) {
+            return;
+        }
+        Component title = Component.translatable("item.grimpipes." + type.id() + "_pipe");
+        player.openMenu(new SimpleMenuProvider((id, inv, p) -> new EndMenu(id, inv, be, type, side), title),
+                buf -> EndMenu.writeOpenData(buf, be, type, side));
+    }
+
+    /** Switches an end between Output and Input (the wrench click, also used by the overview screen). */
+    public static void toggleEnd(PipeBlockEntity be, Player player, int t, Direction dir) {
+        int arm = be.key().arm(t, dir);
+        if (arm != PipeKey.ARM_INPUT && arm != PipeKey.ARM_OUTPUT) {
+            return;
+        }
+        ConnectionMode next = be.mode(t, dir) == ConnectionMode.INPUT ? ConnectionMode.OUTPUT : ConnectionMode.INPUT;
+        be.setMode(t, dir, next);
+        Level level = be.getLevel();
+        if (level != null) {
+            click(level, be.getBlockPos(), next == ConnectionMode.INPUT ? 1.4f : 1.0f);
+        }
+    }
+
+    // ---- Facades ----
+
+    /** Full, plain blocks only: no block entities, no odd shapes, not another pipe. */
+    public static boolean canBeFacade(BlockState state, BlockGetter level, BlockPos pos) {
+        return !state.isAir() && !state.hasBlockEntity() && !(state.getBlock() instanceof PipeBlock)
+                && state.getRenderShape() == RenderShape.MODEL
+                && Block.isShapeFullBlock(state.getShape(level, pos))
+                && Block.isShapeFullBlock(state.getCollisionShape(level, pos));
+    }
+
+    private static void removeFacade(PipeBlockEntity be, Level level, BlockPos pos, Player player) {
+        BlockState facade = be.facade();
+        if (facade == null) {
+            return;
+        }
+        be.setFacade(null);
+        if (!player.getAbilities().instabuild) {
+            ItemStack back = new ItemStack(facade.getBlock());
+            if (!player.getInventory().add(back)) {
+                player.drop(back, false);
+            }
+        }
+        net.minecraft.world.level.block.SoundType sound = facade.getSoundType();
+        level.playSound(null, pos, sound.getBreakSound(), SoundSource.BLOCKS, (sound.getVolume() + 1f) / 2f, sound.getPitch() * 0.8f);
+    }
+
+    /** A disguised pipe looks, sounds and lights like its facade. */
+    @Override
+    public net.minecraft.world.level.block.SoundType getSoundType(BlockState state, LevelReader level, BlockPos pos,
+                                                                  @Nullable net.minecraft.world.entity.Entity entity) {
+        if (level.getBlockEntity(pos) instanceof PipeBlockEntity be && be.facade() != null) {
+            return be.facade().getSoundType(level, pos, entity);
+        }
+        return super.getSoundType(state, level, pos, entity);
+    }
+
+    @Override
+    public BlockState getAppearance(BlockState state, net.minecraft.world.level.BlockAndTintGetter level, BlockPos pos, Direction side,
+                                    @Nullable BlockState queryState, @Nullable BlockPos queryPos) {
+        if (level.getBlockEntity(pos) instanceof PipeBlockEntity be && be.facade() != null) {
+            return be.facade();
+        }
+        return state;
     }
 
     /**

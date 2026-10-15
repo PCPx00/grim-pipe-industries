@@ -22,7 +22,7 @@ final class EnergyTransport {
             return 0;
         }
         int moved = distribute(net, src, available, from);
-        src.cursor++;
+        src.advance();
         return moved;
     }
 
@@ -33,14 +33,15 @@ final class EnergyTransport {
     static int distribute(PipeNetwork net, @Nullable Endpoint src, int amount, @Nullable IEnergyStorage source) {
         int remaining = amount;
         int moved = 0;
-        int cursor = src != null ? src.cursor : 0;
+        int cursor = net.pushCursor[com.xtri6.grimpipes.pipe.ResourceKind.ENERGY.ordinal()];
+        boolean nearestFirst = src != null && src.distribution() == com.xtri6.grimpipes.pipe.Distribution.NEAREST;
         // Highest priority group first; inside a group, split evenly, then let anyone with room take the rest.
         for (int g = 0; g < net.groupCount() && remaining > 0; g++) {
             int n = net.groupSize(g);
             for (int pass = 0; pass < 2 && remaining > 0; pass++) {
                 int receivers = n;
                 for (int i = 0; i < n && remaining > 0; i++) {
-                    Endpoint dest = net.groupOutput(g, cursor, i);
+                    Endpoint dest = src != null ? src.groupDest(g, i) : net.groupOutput(g, cursor, i);
                     if (src != null && dest.target().equals(src.target())) {
                         receivers--;
                         continue;
@@ -50,7 +51,7 @@ final class EnergyTransport {
                         receivers--;
                         continue;
                     }
-                    int share = pass == 0 ? Math.max(1, remaining / Math.max(1, receivers - i)) : remaining;
+                    int share = pass == 0 && !nearestFirst ? Math.max(1, remaining / Math.max(1, receivers - i)) : remaining;
                     int accepted = to.receiveEnergy(Math.min(share, remaining), true);
                     if (accepted <= 0) {
                         continue;

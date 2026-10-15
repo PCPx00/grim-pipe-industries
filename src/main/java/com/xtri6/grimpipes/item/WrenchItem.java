@@ -38,5 +38,6 @@ public class WrenchItem extends Item {
         tooltip.add(Component.translatable("tooltip.grimpipes.wrench.3").withStyle(ChatFormatting.GRAY));
         tooltip.add(Component.translatable("tooltip.grimpipes.wrench.4").withStyle(ChatFormatting.GRAY));
         tooltip.add(Component.translatable("tooltip.grimpipes.wrench.5").withStyle(ChatFormatting.DARK_PURPLE));
+        tooltip.add(Component.translatable("tooltip.grimpipes.wrench.6").withStyle(ChatFormatting.DARK_PURPLE));
     }
 }

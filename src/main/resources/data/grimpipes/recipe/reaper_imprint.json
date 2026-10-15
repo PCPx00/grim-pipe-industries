@@ -1,0 +1,19 @@
+{
+  "type": "minecraft:crafting_shapeless",
+  "category": "misc",
+  "ingredients": [
+    {
+      "item": "minecraft:paper"
+    },
+    {
+      "item": "minecraft:amethyst_shard"
+    },
+    {
+      "item": "minecraft:glow_ink_sac"
+    }
+  ],
+  "result": {
+    "id": "grimpipes:reaper_imprint",
+    "count": 1
+  }
+}

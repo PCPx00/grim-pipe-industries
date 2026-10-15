@@ -32,6 +32,10 @@ public class EndScreen extends AbstractContainerScreen<EndMenu> {
     private FilterMode shownMode;
     private IconButton redstoneButton;
     private RedstoneMode shownRedstone;
+    private IconButton distributionButton;
+    private com.xtri6.grimpipes.pipe.Distribution shownDistribution;
+    private IconButton matchButton;
+    private Boolean shownMatch;
 
     public EndScreen(EndMenu menu, Inventory playerInventory, Component title) {
         super(menu, playerInventory, title);
@@ -57,9 +61,20 @@ public class EndScreen extends AbstractContainerScreen<EndMenu> {
                     .build());
             updateMode();
         }
+        if (menu.showsFilter()) {
+            matchButton = addRenderableWidget(new IconButton(leftPos + EndMenu.FILTER_X + 57, topPos + EndMenu.FILTER_Y + 56,
+                    b -> click(EndMenu.BTN_MATCH)));
+        }
+        if (com.xtri6.grimpipes.client.ClientHooks.overviewReturn != null
+                && com.xtri6.grimpipes.client.ClientHooks.overviewReturn.equals(menu.pos())) {
+            addRenderableWidget(new TextButton(leftPos + imageWidth - 34, topPos + 4, "<", b -> backToOverview(),
+                    Component.translatable("gui.grimpipes.back")));
+        }
         if (menu.isInput()) {
             redstoneButton = addRenderableWidget(new IconButton(leftPos + EndMenu.CARD_X + 26, topPos + EndMenu.CARD_Y - 1,
                     b -> click(EndMenu.BTN_REDSTONE)));
+            distributionButton = addRenderableWidget(new IconButton(leftPos + EndMenu.CARD_X - 22, topPos + EndMenu.CARD_Y - 1,
+                    b -> click(EndMenu.BTN_DISTRIBUTION)));
         } else {
             addRenderableWidget(new TextButton(leftPos + 10, topPos + EndMenu.CARD_Y, "-",
                     b -> click(hasShiftDown() ? EndMenu.BTN_PRIORITY_DOWN_10 : EndMenu.BTN_PRIORITY_DOWN),
@@ -69,6 +84,41 @@ public class EndScreen extends AbstractContainerScreen<EndMenu> {
                     Component.translatable("gui.grimpipes.priority.up")));
         }
         updateRedstone();
+    }
+
+    private void backToOverview() {
+        net.minecraft.core.BlockPos pos = menu.pos();
+        onClose();
+        com.xtri6.grimpipes.client.ClientHooks.openOverview(pos);
+    }
+
+    @Override
+    public void removed() {
+        super.removed();
+        // The Back button only shows when this screen was opened from the overview.
+        if (minecraft == null || !(minecraft.screen instanceof OverviewScreen)) {
+            com.xtri6.grimpipes.client.ClientHooks.overviewReturn = null;
+        }
+    }
+
+    private void updateExtras() {
+        if (distributionButton != null && menu.distribution() != shownDistribution) {
+            shownDistribution = menu.distribution();
+            distributionButton.icon = new ItemStack(switch (shownDistribution) {
+                case ROUND_ROBIN -> Items.REPEATER;
+                case NEAREST -> Items.COMPASS;
+                case RANDOM -> Items.ENDER_EYE;
+            });
+            distributionButton.setTooltip(Tooltip.create(Component.translatable("gui.grimpipes.distribution.title")
+                    .append(": ").append(shownDistribution.displayName()).append(" - ")
+                    .append(Component.translatable("gui.grimpipes.distribution." + shownDistribution.id() + ".tooltip"))));
+        }
+        if (matchButton != null && !Boolean.valueOf(menu.matchComponents()).equals(shownMatch)) {
+            shownMatch = menu.matchComponents();
+            matchButton.icon = new ItemStack(shownMatch ? Items.ENCHANTED_BOOK : Items.BOOK);
+            matchButton.setTooltip(Tooltip.create(Component.translatable(shownMatch ? "gui.grimpipes.match.on" : "gui.grimpipes.match.off")
+                    .append("\n").append(Component.translatable("gui.grimpipes.match.tooltip"))));
+        }
     }
 
     private void click(int button) {
@@ -100,6 +150,7 @@ public class EndScreen extends AbstractContainerScreen<EndMenu> {
         super.containerTick();
         updateMode();
         updateRedstone();
+        updateExtras();
     }
 
     private void updateMode() {

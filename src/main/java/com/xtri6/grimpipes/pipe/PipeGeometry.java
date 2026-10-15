@@ -89,6 +89,7 @@ public final class PipeGeometry {
     }
 
     public static Layout layout(PipeKey key) {
+        key = key.withFlow(0); // flow only changes the look, not the shape
         Layout cached = CACHE.get(key);
         if (cached != null) {
             return cached;
@@ -102,6 +103,9 @@ public final class PipeGeometry {
     }
 
     public static VoxelShape shape(PipeKey key) {
+        if (key.hasFacade()) {
+            return Shapes.block();
+        }
         return key.typeMask() == 0 ? FALLBACK : layout(key).shape();
     }
 

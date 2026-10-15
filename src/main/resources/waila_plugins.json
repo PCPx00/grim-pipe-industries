@@ -1,0 +1,7 @@
+{
+  "grimpipes:pipe": {
+    "initializer": "com.xtri6.grimpipes.compat.WthitPlugin",
+    "side": "*",
+    "required": ["grimpipes"]
+  }
+}

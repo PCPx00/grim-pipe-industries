@@ -31,7 +31,24 @@ repositories {
     maven {
         name = 'ModMaven'
         url = 'https://modmaven.dev'
-        content { includeGroup 'mekanism' }
+        content {
+            includeGroup 'mekanism'
+            includeGroup 'appeng'
+        }
+    }
+    // JEI API (optional info pages)
+    maven {
+        name = 'BlameJared'
+        url = 'https://maven.blamejared.com'
+        content {
+            includeGroup 'mezz.jei'
+            includeGroup 'net.mezzdev.config'
+        }
+    }
+    // Jade (optional tooltips) and other mods for the compatibility check
+    exclusiveContent {
+        forRepository { maven { name = 'Modrinth'; url = 'https://api.modrinth.com/maven' } }
+        filter { includeGroup 'maven.modrinth' }
     }
 }
 
@@ -80,6 +97,25 @@ neoForge {
             systemProperty 'grimpipes.mekcheck', 'true'
         }
         // DEV-ONLY-MEKCHECK-END
+
+        // DEV-ONLY-COMPAT-RUN-BEGIN
+        compatCheck {
+            server()
+            gameDirectory = project.file('run-compat')
+            programArgument '--nogui'
+            systemProperty 'grimpipes.compat', 'true'
+        }
+        // DEV-ONLY-COMPAT-RUN-END
+
+        // DEV-ONLY-SMOKE-BEGIN: headless client check of screens and rendering (xvfb-run ./gradlew runSmoke)
+        smoke {
+            client()
+            gameDirectory = project.file('run-smoke')
+            systemProperty 'neoforge.enabledGameTestNamespaces', project.mod_id
+            systemProperty 'grimpipes.smoke', 'true'
+            programArguments.addAll '--quickPlaySingleplayer', 'smoke', '--width', '1280', '--height', '720'
+        }
+        // DEV-ONLY-SMOKE-END
 
         gameTestServer {
             type = "gameTestServer"
@@ -134,6 +170,29 @@ dependencies {
     compileOnly "mekanism:Mekanism:${mekanism_version}:api"
     // Dev/test only: real Mekanism in the dev game and game tests so chemical pipes get tested in-game.
     localRuntime "mekanism:Mekanism:${mekanism_version}"
+
+    // Optional integrations: compiled against, never required.
+    compileOnly "mezz.jei:jei-${minecraft_version}-neoforge-api:${jei_version}"
+    compileOnly "maven.modrinth:jade:${jade_version}"
+    compileOnly "maven.modrinth:wthit:${wthit_version}"
+
+    // DEV-ONLY-COMPAT-BEGIN: big-pack compatibility check, only with -Pcompat (./gradlew runCompatCheck -Pcompat)
+    if (project.hasProperty('compat')) {
+        localRuntime "mezz.jei:jei-${minecraft_version}-neoforge:${jei_version}"
+        localRuntime "maven.modrinth:jade:${jade_version}"
+        localRuntime "maven.modrinth:ae2:${ae2_version}"
+        localRuntime "maven.modrinth:guideme:${guideme_version}"
+        localRuntime "maven.modrinth:refined-storage:${rs_version}"
+        localRuntime "maven.modrinth:create:${create_version}"
+        if (file('../gsi/build/libs/grimsoul-1.0.1.jar').exists()) {
+            localRuntime files('../gsi/build/libs/grimsoul-1.0.1.jar')
+        }
+    }
+    if (project.hasProperty('wthit')) {
+        localRuntime "maven.modrinth:wthit:${wthit_version}"
+        localRuntime "maven.modrinth:badpackets:${badpackets_version}"
+    }
+    // DEV-ONLY-COMPAT-END
     // Example optional mod dependency with JEI
     // The JEI API is declared for compile time use, while the full JEI artifact is used at runtime
     // compileOnly "mezz.jei:jei-${mc_version}-common-api:${jei_version}"

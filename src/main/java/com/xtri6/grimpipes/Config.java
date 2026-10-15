@@ -27,6 +27,8 @@ public final class Config {
 
     public static final ModConfigSpec.IntValue IDLE_BACKOFF_MAX;
     public static final ModConfigSpec.IntValue FLUID_INTERVAL;
+    public static final ModConfigSpec.BooleanValue FLOW_ANIMATION;
+    public static final ModConfigSpec.IntValue SOUL_LINK_RANGE;
 
     static {
         BUILDER.comment("Speeds for each pipe tier. Each value applies to ONE pipe end (one side of one pipe).").push("tiers");
@@ -55,6 +57,17 @@ public final class Config {
                 .comment("Fluids and chemicals are moved in batches every this many ticks (the per-tick rate is multiplied to match).",
                         "Energy always moves every tick.")
                 .defineInRange("fluidBatchTicks", 2, 1, 20);
+        BUILDER.pop();
+
+        BUILDER.push("features");
+        FLOW_ANIMATION = BUILDER
+                .comment("Pipes show a subtle flow animation while they are moving something.",
+                        "Pipes switch it on or off at most once a second, with a 2-second hold, so it costs almost nothing.")
+                .define("flowAnimation", true);
+        SOUL_LINK_RANGE = BUILDER
+                .comment("Furthest a Soul Link can reach, in blocks. 0 = anywhere in the same dimension.",
+                        "Both linked pipes must be loaded for the link to carry anything; pipes never load chunks.")
+                .defineInRange("soulLinkRange", 0, 0, 1_000_000);
         BUILDER.pop();
     }
 

@@ -12,6 +12,10 @@ public final class ClientConfig {
                     "You can also switch it with the small button in the top-right corner of any pipe screen.")
             .defineEnum("gui.theme", GuiStyle.Theme.REAPER);
 
+    public static final ModConfigSpec.BooleanValue SHOW_FLOW = BUILDER
+            .comment("Show the flow animation on pipes that are moving something (the server can also turn it off for everyone).")
+            .define("render.flowAnimation", true);
+
     public static final ModConfigSpec SPEC = BUILDER.build();
 
     private ClientConfig() {}

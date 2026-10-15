@@ -36,7 +36,7 @@ Grim Pipe Industries is a small, black-and-purple pipe mod that stays out of you
 | **Reaper Chemical Pipe** | Mekanism gases, infuse types, pigments and slurries (Mekanism optional) |
 | **Reaper Omni Pipe** | **All four** on a single pipe |
 
-Pipes store nothing, so nothing can get stuck, mixed or lost inside them. Items arrive instantly with no item entities to render. Outputs are served round-robin, so every machine on a line gets its share.
+Pipes store nothing, so nothing can get stuck, mixed or lost inside them. Items arrive instantly with no item entities to render. Outputs are served round-robin by default, so every machine on a line gets its share. Pipes that are moving something show a soft flowing glow, so you can see at a glance which lines are working.
 
 <p align="center"><img src="docs/gifs/h_bundles.gif" alt="Stack them on one side" width="100%"></p>
 
@@ -64,6 +64,7 @@ The wrench targets the exact band you click, so in a bundle you flip just the st
 - **Speed card slot:** drop a card in or take it out. The screen shows the exact speed that end runs at.
 - **9-slot filter:** click with an item to add it (your item is not used up), or shift-click from your inventory. Buckets filter fluids.
 - **Redstone control:** *Always on*, *Needs signal* or *Stops with signal*. Power the pipe block to switch that end on or off.
+- **Distribution:** *Round-robin* (share evenly), *Nearest first* (fill the closest Output before the next) or *Random*.
 - **Whitelist** (only pull these), **Blacklist** (pull everything except these) or **Void** (pull everything and delete what's in the filter).
 - **Three styles**, switched from the corner button: *Reaper*, *Vanilla* and *Dark*, the same as Grim Soul Industries.
 
@@ -74,11 +75,30 @@ Machines that push on their own (hoppers, generators, auto-eject) can push strai
 - **Priority:** higher numbers fill first; ends with the same priority share round-robin. Shift-click the buttons for ±10.
 - **Whitelist / Blacklist filter** for items and fluids, so one line can sort diamonds into one chest and everything else into another.
 
+**Sneak-click a pipe with an empty hand** to see every end of that block in one screen: each strand, each side, Input or Output, and its card. Click an end there to open its settings, right-click to switch it between Input and Output.
+
 <p align="center"><img src="docs/gallery/08_gui.png" width="40%"></p>
+
+<p align="center"><img src="docs/gifs/h_tools.gif" alt="Sorting and power tools" width="100%"></p>
+
+| Tool | What it does |
+| --- | --- |
+| **Exact match** (book button on every filter) | Off: a filter matches the item, ignoring enchantments, damage and contents. On: it must match exactly. |
+| **Reaper Tag Filter** | Put it in any filter slot and type rules: `#c:ingots` (a tag), `#c:ores/*` (every tag under it), `@mekanism` (a whole mod), `*_log` (item ids with `*` as a wildcard). Shows what it matches as you type. Works for fluids too. |
+| **Reaper Imprint** | Sneak-click an end to copy its settings, then click other ends to paste them: mode, filter, redstone, priority and distribution. Speed cards stay put. Handy for big sorting walls. |
+
+<p align="center"><img src="docs/gifs/h_extras.gif" alt="Links, facades and help" width="100%"></p>
+
+- **Soul Link:** click one pipe, then another anywhere in the same dimension. Their networks become one, with no pipes in between. Both ends must be loaded (pipes never load chunks), and servers can set a maximum range. Sneak-click a linked pipe to break the link. The Soul Link isn't used up.
+- **Facades:** sneak-right-click a pipe with a plain full block to hide it inside that block. It keeps working; click it with the wrench to get the block back.
+- **Reaper Field Guide:** a 10-page in-game book that teaches the whole mod.
+- **Jade and WTHIT:** look at a pipe to see its strands, and the mode, card, filter, redstone and priority of the end you're looking at.
+- **JEI:** every item has an info page.
+- **Servers:** speeds come from the server's config, and the screens show the server's numbers, not your local ones.
 
 <p align="center"><img src="docs/gifs/h_tiers.gif" alt="Speed cards" width="100%"></p>
 
-Speed cards use the Grim Soul Industries tiers and colors. Only **Input ends** need one: a single Soulforged card on the end that pulls runs a whole line of plain pipes at full speed. The card's color shows on the corners of the end plate.
+Speed cards use the Grim Soul Industries tiers and colors. With Grim Soul Industries installed, a Grim Soul speed card also crafts the Soulforged card. Only **Input ends** need one: a single Soulforged card on the end that pulls runs a whole line of plain pipes at full speed. The card's color shows on the corners of the end plate.
 
 | Tier | Items | Fluid | Energy | Chemicals |
 | --- | --- | --- | --- | --- |
@@ -99,7 +119,7 @@ All of these can be changed in `config/grimpipes-common.toml`.
 - **Idle ends back off** automatically and wake up the moment you change their card or filter.
 - **Pipes are baked into the chunk mesh** like normal blocks, so there's zero per-frame rendering cost. No entities, no flying items.
 - **Never loads chunks.**
-- Measured on a real server: a single network of **1,024 pipes with 32 ends** costs about **0.03 ms per tick**, roughly 0.06% of the tick budget.
+- Measured on a real server: a single network of **1,024 pipes with 32 ends** costs about **0.1 ms per tick**, roughly 0.2% of the tick budget.
 
 <p align="center"><img src="docs/gallery/06_dusk_line.png" width="85%"></p>
 
@@ -116,10 +136,26 @@ All of these can be changed in `config/grimpipes-common.toml`.
 - NeoForge **21.1.0** or newer
 - Optional: **Mekanism** 10.7+ for the Chemical Pipe (and the chemical part of the Omni Pipe). Tested with real Mekanism tanks. As with Mekanism's own tubes, set the machine's side configuration to Output on the side you pull from.
 
+Optional extras: **Jade** or **WTHIT** (look-at tooltips), **JEI** (info pages), **Grim Soul Industries** (extra recipes).
+
 Needed on both client and server.
 
 ## Compatibility
-Works with anything that uses the standard NeoForge item, fluid and energy capabilities: Mekanism, Applied Energistics 2, Refined Storage, Thermal, Create, Industrial Foregoing, Powah, Grim Soul Industries, plain hoppers and chests, and much more.
+Works with anything that uses the standard NeoForge item, fluid and energy capabilities.
+
+Checked on a real server with all of these loaded together, moving items, fluids and energy into and back out of each block:
+
+| Mod | Blocks checked |
+| --- | --- |
+| Create 6.0 | Item Vault, Depot, Fluid Tank, Basin |
+| Applied Energistics 2 | ME Interface (items), Energy Acceptor (power in) |
+| Refined Storage 2 | Controller (power in) |
+| Mekanism 10.7 | Bin, Fluid Tank, Energy Cube, Energized Smelter, chemical tanks (Chemical and Omni pipes) |
+| Grim Soul Industries | XP Tank (Liquid Experience in and out) |
+
+Machines that only use power take it in but don't give it back, as expected. Mekanism energy cubes send power out of their own output face.
+
+Thermal, Industrial Foregoing, Powah and others use the same standard connections and are expected to work, but haven't been checked in-game yet.
 
 ## Building from source
 ```

@@ -1,0 +1,19 @@
+{
+  "type": "minecraft:crafting_shapeless",
+  "category": "misc",
+  "ingredients": [
+    {
+      "item": "minecraft:paper"
+    },
+    {
+      "item": "minecraft:amethyst_shard"
+    },
+    {
+      "tag": "c:dusts/redstone"
+    }
+  ],
+  "result": {
+    "id": "grimpipes:tag_filter",
+    "count": 2
+  }
+}

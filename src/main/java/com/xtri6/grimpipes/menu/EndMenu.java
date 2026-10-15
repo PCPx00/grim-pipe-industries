@@ -7,6 +7,7 @@ import com.xtri6.grimpipes.block.EndConfig;
 import com.xtri6.grimpipes.block.PipeBlockEntity;
 import com.xtri6.grimpipes.item.UpgradeItem;
 import com.xtri6.grimpipes.pipe.ConnectionMode;
+import com.xtri6.grimpipes.pipe.Distribution;
 import com.xtri6.grimpipes.pipe.FilterMode;
 import com.xtri6.grimpipes.pipe.PipeType;
 import com.xtri6.grimpipes.pipe.RedstoneMode;
@@ -55,10 +56,15 @@ public class EndMenu extends AbstractContainerMenu {
     public static final int BTN_PRIORITY_UP = 3;
     public static final int BTN_PRIORITY_DOWN_10 = 4;
     public static final int BTN_PRIORITY_UP_10 = 5;
+    public static final int BTN_DISTRIBUTION = 6;
+    public static final int BTN_MATCH = 7;
 
     private static final int DATA_MODE = 0;
     private static final int DATA_REDSTONE = 1;
     private static final int DATA_PRIORITY = 2;
+    private static final int DATA_DISTRIBUTION = 3;
+    private static final int DATA_MATCH = 4;
+    private static final int DATA_COUNT = 5;
 
     private final BlockPos pos;
     private final PipeType type;
@@ -74,7 +80,7 @@ public class EndMenu extends AbstractContainerMenu {
     /** Client side, built from the open-screen packet. */
     public EndMenu(int id, Inventory inv, RegistryFriendlyByteBuf buf) {
         this(id, inv, buf.readBlockPos(), PipeType.byIndex(buf.readVarInt()), Direction.from3DDataValue(buf.readVarInt()),
-                buf.readBoolean(), null, new ItemStackHandler(1), new ItemStackHandler(EndConfig.FILTER_SLOTS), new SimpleContainerData(3));
+                buf.readBoolean(), null, new ItemStackHandler(1), new ItemStackHandler(EndConfig.FILTER_SLOTS), new SimpleContainerData(DATA_COUNT));
     }
 
     /** Server side, backed by the real end. */
@@ -139,6 +145,8 @@ public class EndMenu extends AbstractContainerMenu {
                 return switch (index) {
                     case DATA_MODE -> cfg.mode().ordinal();
                     case DATA_REDSTONE -> cfg.redstone().ordinal();
+                    case DATA_DISTRIBUTION -> cfg.distribution().ordinal();
+                    case DATA_MATCH -> cfg.matchComponents() ? 1 : 0;
                     default -> cfg.priority();
                 };
             }
@@ -148,15 +156,29 @@ public class EndMenu extends AbstractContainerMenu {
                 switch (index) {
                     case DATA_MODE -> cfg.setMode(FilterMode.byIndex(value));
                     case DATA_REDSTONE -> cfg.setRedstone(RedstoneMode.byIndex(value));
+                    case DATA_DISTRIBUTION -> cfg.setDistribution(Distribution.byIndex(value));
+                    case DATA_MATCH -> cfg.setMatchComponents(value != 0);
                     default -> cfg.setPriority(value);
                 }
             }
 
             @Override
             public int getCount() {
-                return 3;
+                return DATA_COUNT;
             }
         };
+    }
+
+    public BlockPos pos() {
+        return pos;
+    }
+
+    public Distribution distribution() {
+        return Distribution.byIndex(data.get(DATA_DISTRIBUTION));
+    }
+
+    public boolean matchComponents() {
+        return data.get(DATA_MATCH) != 0;
     }
 
     public PipeType type() {
@@ -214,6 +236,18 @@ public class EndMenu extends AbstractContainerMenu {
                     return false;
                 }
                 data.set(DATA_REDSTONE, redstone().next().ordinal());
+            }
+            case BTN_DISTRIBUTION -> {
+                if (!input) {
+                    return false;
+                }
+                data.set(DATA_DISTRIBUTION, distribution().next().ordinal());
+            }
+            case BTN_MATCH -> {
+                if (!showFilter) {
+                    return false;
+                }
+                data.set(DATA_MATCH, matchComponents() ? 0 : 1);
             }
             case BTN_PRIORITY_DOWN -> data.set(DATA_PRIORITY, priority() - 1);
             case BTN_PRIORITY_UP -> data.set(DATA_PRIORITY, priority() + 1);

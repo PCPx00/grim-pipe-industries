@@ -1,0 +1,30 @@
+{
+  "neoforge:conditions": [
+    {
+      "type": "neoforge:mod_loaded",
+      "modid": "grimsoul"
+    }
+  ],
+  "type": "minecraft:crafting_shaped",
+  "category": "misc",
+  "pattern": [
+    "SNS",
+    "NUN",
+    "SNS"
+  ],
+  "key": {
+    "S": {
+      "item": "grimsoul:speed_card"
+    },
+    "N": {
+      "item": "minecraft:netherite_scrap"
+    },
+    "U": {
+      "item": "grimpipes:wraithbound_upgrade"
+    }
+  },
+  "result": {
+    "id": "grimpipes:soulforged_upgrade",
+    "count": 1
+  }
+}

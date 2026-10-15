@@ -43,7 +43,7 @@ It's done when you see **BUILD SUCCESSFUL**.
 The jar is in:
 
 ```
-build\libs\grimpipes-1.3.1.jar
+build\libs\grimpipes-1.4.0.jar
 ```
 
 ## 6. Put it in Nine Craft

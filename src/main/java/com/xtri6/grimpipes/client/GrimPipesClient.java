@@ -23,6 +23,8 @@ public final class GrimPipesClient {
         container.registerConfig(ModConfig.Type.CLIENT, ClientConfig.SPEC);
         modBus.addListener(ModConfigEvent.Loading.class, ClientConfig::onLoad);
         modBus.addListener(ModConfigEvent.Reloading.class, ClientConfig::onLoad);
+        net.neoforged.neoforge.common.NeoForge.EVENT_BUS.addListener(
+                (net.neoforged.neoforge.client.event.ClientPlayerNetworkEvent.LoggingOut e) -> com.xtri6.grimpipes.pipe.SyncedRates.clear());
     }
 
     public static void registerScreens(RegisterMenuScreensEvent event) {
@@ -35,7 +37,17 @@ public final class GrimPipesClient {
 
     /** Tint index 1-5 = speed-card tier corners on Input end plates, colored like the Grim Soul Industries tiers. */
     public static void registerColors(RegisterColorHandlersEvent.Block event) {
-        event.register((state, level, pos, tint) -> tint >= 1 ? PipeTier.byIndex(tint - 1).rgb() : 0xFFFFFF,
-                Registration.PIPE.get());
+        event.register((state, level, pos, tint) -> {
+            if (tint >= PipeBakedModel.FACADE_TINT_OFFSET) {
+                // A disguised pipe: ask the facade block's own color handler (grass, leaves...).
+                if (level != null && pos != null && level.getBlockEntity(pos) instanceof com.xtri6.grimpipes.block.PipeBlockEntity be
+                        && be.facade() != null) {
+                    return net.minecraft.client.Minecraft.getInstance().getBlockColors()
+                            .getColor(be.facade(), level, pos, tint - PipeBakedModel.FACADE_TINT_OFFSET);
+                }
+                return 0xFFFFFF;
+            }
+            return tint >= 1 ? PipeTier.byIndex(tint - 1).rgb() : 0xFFFFFF;
+        }, Registration.PIPE.get());
     }
 }

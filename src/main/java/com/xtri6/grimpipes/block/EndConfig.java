@@ -2,7 +2,9 @@ package com.xtri6.grimpipes.block;
 
 import java.util.Optional;
 
+import com.xtri6.grimpipes.item.TagFilterItem;
 import com.xtri6.grimpipes.item.UpgradeItem;
+import com.xtri6.grimpipes.pipe.Distribution;
 import com.xtri6.grimpipes.pipe.FilterMode;
 import com.xtri6.grimpipes.pipe.FilterMode.Decision;
 import com.xtri6.grimpipes.pipe.PipeTier;
@@ -31,6 +33,8 @@ public final class EndConfig {
     private FilterMode mode = FilterMode.BLACKLIST;
     private RedstoneMode redstone = RedstoneMode.ALWAYS;
     private int priority;
+    private Distribution distribution = Distribution.ROUND_ROBIN;
+    private boolean matchComponents;
     private boolean filterEmpty = true;
     private PipeTier tier = PipeTier.HOLLOW;
 
@@ -95,6 +99,26 @@ public final class EndConfig {
         }
     }
 
+    /** Input ends: how pulled things are spread over outputs of equal priority. */
+    public Distribution distribution() {
+        return distribution;
+    }
+
+    public void setDistribution(Distribution distribution) {
+        this.distribution = distribution;
+        onChanged.run();
+    }
+
+    /** Whether filter entries must also match data components (enchantments, damage, contents, NBT). */
+    public boolean matchComponents() {
+        return matchComponents;
+    }
+
+    public void setMatchComponents(boolean matchComponents) {
+        this.matchComponents = matchComponents;
+        onChanged.run();
+    }
+
     public PipeTier tier() {
         return tier;
     }
@@ -110,7 +134,8 @@ public final class EndConfig {
 
     public boolean isDefault() {
         return card.getStackInSlot(0).isEmpty() && filterEmpty && mode == FilterMode.BLACKLIST
-                && redstone == RedstoneMode.ALWAYS && priority == 0;
+                && redstone == RedstoneMode.ALWAYS && priority == 0
+                && distribution == Distribution.ROUND_ROBIN && !matchComponents;
     }
 
     private void refreshFilterEmpty() {
@@ -133,17 +158,32 @@ public final class EndConfig {
         };
     }
 
+    /** One filter entry against one item: a tag filter by its rules, otherwise the same item (and components if asked). */
+    private boolean entryMatches(ItemStack entry, ItemStack stack) {
+        if (entry.getItem() instanceof TagFilterItem) {
+            return TagFilterItem.matches(entry, stack);
+        }
+        return matchComponents ? ItemStack.isSameItemSameComponents(entry, stack) : ItemStack.isSameItem(entry, stack);
+    }
+
+    /** One filter entry against a fluid: a tag filter by its rules, otherwise the fluid it contains (a water bucket = water). */
+    private boolean entryMatches(ItemStack entry, FluidStack fluid) {
+        if (entry.getItem() instanceof TagFilterItem) {
+            return TagFilterItem.matches(entry, fluid);
+        }
+        Optional<FluidStack> contained = FluidUtil.getFluidContained(entry);
+        if (contained.isEmpty()) {
+            return false;
+        }
+        return matchComponents ? FluidStack.isSameFluidSameComponents(contained.get(), fluid)
+                : FluidStack.isSameFluid(contained.get(), fluid);
+    }
+
     public Decision decide(ItemStack stack) {
         if (filterEmpty) {
             return mode == FilterMode.WHITELIST ? Decision.BLOCK : Decision.PASS;
         }
-        for (int i = 0; i < FILTER_SLOTS; i++) {
-            ItemStack f = filter.getStackInSlot(i);
-            if (!f.isEmpty() && ItemStack.isSameItem(f, stack)) {
-                return decide(true);
-            }
-        }
-        return decide(false);
+        return decide(matchesItem(stack));
     }
 
     /** Fluids match a filter entry that is, or contains, that fluid (a water bucket filters water). */
@@ -151,17 +191,7 @@ public final class EndConfig {
         if (filterEmpty) {
             return mode == FilterMode.WHITELIST ? Decision.BLOCK : Decision.PASS;
         }
-        for (int i = 0; i < FILTER_SLOTS; i++) {
-            ItemStack f = filter.getStackInSlot(i);
-            if (f.isEmpty()) {
-                continue;
-            }
-            Optional<FluidStack> contained = FluidUtil.getFluidContained(f);
-            if (contained.isPresent() && FluidStack.isSameFluid(contained.get(), fluid)) {
-                return decide(true);
-            }
-        }
-        return decide(false);
+        return decide(matchesFluid(fluid));
     }
 
     // ---- Output ends: what they accept ----
@@ -169,7 +199,7 @@ public final class EndConfig {
     private boolean matchesItem(ItemStack stack) {
         for (int i = 0; i < FILTER_SLOTS; i++) {
             ItemStack f = filter.getStackInSlot(i);
-            if (!f.isEmpty() && ItemStack.isSameItem(f, stack)) {
+            if (!f.isEmpty() && entryMatches(f, stack)) {
                 return true;
             }
         }
@@ -179,11 +209,8 @@ public final class EndConfig {
     private boolean matchesFluid(FluidStack fluid) {
         for (int i = 0; i < FILTER_SLOTS; i++) {
             ItemStack f = filter.getStackInSlot(i);
-            if (!f.isEmpty()) {
-                Optional<FluidStack> c = FluidUtil.getFluidContained(f);
-                if (c.isPresent() && FluidStack.isSameFluid(c.get(), fluid)) {
-                    return true;
-                }
+            if (!f.isEmpty() && entryMatches(f, fluid)) {
+                return true;
             }
         }
         return false;
@@ -213,17 +240,42 @@ public final class EndConfig {
         tag.putInt("Mode", mode.ordinal());
         tag.putInt("Redstone", redstone.ordinal());
         tag.putInt("Priority", priority);
+        tag.putInt("Distribution", distribution.ordinal());
+        tag.putBoolean("MatchComponents", matchComponents);
         return tag;
     }
 
     void load(CompoundTag tag, HolderLookup.Provider registries) {
         card.deserializeNBT(registries, tag.getCompound("Card"));
+        loadSettingsQuietly(tag, registries);
+        ItemStack s = card.getStackInSlot(0);
+        tier = s.getItem() instanceof UpgradeItem u ? u.tier() : PipeTier.HOLLOW;
+    }
+
+    private void loadSettingsQuietly(CompoundTag tag, HolderLookup.Provider registries) {
         filter.deserializeNBT(registries, tag.getCompound("Filter"));
         mode = FilterMode.byIndex(tag.getInt("Mode"));
         redstone = RedstoneMode.byIndex(tag.getInt("Redstone"));
         priority = Math.max(MIN_PRIORITY, Math.min(MAX_PRIORITY, tag.getInt("Priority")));
-        ItemStack s = card.getStackInSlot(0);
-        tier = s.getItem() instanceof UpgradeItem u ? u.tier() : PipeTier.HOLLOW;
+        distribution = Distribution.byIndex(tag.getInt("Distribution"));
+        matchComponents = tag.getBoolean("MatchComponents");
         refreshFilterEmpty();
+    }
+
+    // ---- Copy / paste (Reaper Imprint): everything except the speed card ----
+
+    public CompoundTag saveSettings(HolderLookup.Provider registries) {
+        CompoundTag tag = save(registries);
+        tag.remove("Card");
+        return tag;
+    }
+
+    public void loadSettings(CompoundTag tag, HolderLookup.Provider registries) {
+        int oldPriority = priority;
+        loadSettingsQuietly(tag, registries);
+        onChanged.run();
+        if (oldPriority != priority) {
+            onRoutingChanged.run();
+        }
     }
 }

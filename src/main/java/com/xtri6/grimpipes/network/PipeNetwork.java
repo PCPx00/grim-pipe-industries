@@ -56,6 +56,22 @@ public final class PipeNetwork {
         destroyed = true;
     }
 
+    // ---- Flow animation state ----
+
+    /** Last game time anything moved through this network. */
+    long lastMoved = Long.MIN_VALUE / 2;
+    /** Whether the pipes currently show the flow animation. */
+    boolean shownFlow;
+
+    void markMoved(long time) {
+        lastMoved = time;
+    }
+
+    /** Pipe distance (in blocks) from one pipe to every pipe of this network. */
+    public it.unimi.dsi.fastutil.longs.Long2IntMap distancesFrom(com.xtri6.grimpipes.block.PipeBlockEntity pipe) {
+        return manager.distances(this, pipe);
+    }
+
     /** Output priority groups: start index and size in {@link #outputs}, highest priority first. */
     private int[] groupStart = new int[0];
     private int[] groupSize = new int[0];
@@ -117,6 +133,10 @@ public final class PipeNetwork {
 
     public int groupCount() {
         return groupSize.length;
+    }
+
+    public int groupStart(int g) {
+        return groupStart[g];
     }
 
     public int groupSize(int g) {

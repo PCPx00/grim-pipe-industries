@@ -41,7 +41,8 @@ public final class PipeModelLoader implements IGeometryLoader<PipeModelLoader.Ge
             return new PipeBakedModel(strand, node,
                     sprites.apply(material("block/pipe_tip_output")),
                     sprites.apply(material("block/pipe_tip_input")),
-                    sprites.apply(material("block/pipe_tier_overlay")));
+                    sprites.apply(material("block/pipe_tier_overlay")),
+                    sprites.apply(material("block/pipe_flow")));
         }
     }
 

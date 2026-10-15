@@ -26,6 +26,8 @@ public final class GrimPipes {
 
     public GrimPipes(IEventBus modBus, ModContainer container) {
         Registration.register(modBus);
+        com.xtri6.grimpipes.packet.Packets.register(modBus);
+        modBus.addListener(net.neoforged.fml.event.config.ModConfigEvent.Reloading.class, GrimPipes::onConfigReload);
         modBus.addListener(this::registerCapabilities);
         container.registerConfig(ModConfig.Type.COMMON, Config.SPEC);
 
@@ -37,6 +39,7 @@ public final class GrimPipes {
         NeoForge.EVENT_BUS.addListener(GrimPipes::onLevelUnload);
         NeoForge.EVENT_BUS.addListener(GrimPipes::onServerStopped);
         NeoForge.EVENT_BUS.addListener(GrimPipes::onRightClickBlock);
+        NeoForge.EVENT_BUS.addListener(GrimPipes::onLogin);
 
         // Dev-only test fixtures; the gametest package is stripped from the release jar.
         if (net.neoforged.neoforge.gametest.GameTestHooks.isGametestEnabled()) {
@@ -44,6 +47,12 @@ public final class GrimPipes {
                 Class.forName("com.xtri6.grimpipes.gametest.TestCaps").getMethod("register", IEventBus.class).invoke(null, modBus);
                 if (Boolean.getBoolean("grimpipes.mekcheck")) {
                     Class.forName("com.xtri6.grimpipes.gametest.MekanismServerCheck").getMethod("register", IEventBus.class).invoke(null, modBus);
+                }
+                if (Boolean.getBoolean("grimpipes.compat")) {
+                    Class.forName("com.xtri6.grimpipes.gametest.CompatServerCheck").getMethod("register", IEventBus.class).invoke(null, modBus);
+                }
+                if (Boolean.getBoolean("grimpipes.smoke")) {
+                    Class.forName("com.xtri6.grimpipes.gametest.ClientSmokeCheck").getMethod("register", IEventBus.class).invoke(null, modBus);
                 }
                 if (Boolean.getBoolean("grimpipes.shots")) {
                     Class.forName("com.xtri6.grimpipes.gametest.ShowcaseHook").getMethod("register", IEventBus.class).invoke(null, modBus);
@@ -81,11 +90,35 @@ public final class GrimPipes {
         }
     }
 
-    /** Lets other mods' wrenches (c:tools/wrench) sneak-click pipes too, like the Reaper Wrench does. */
+    /**
+     * Sneak-clicks Minecraft would normally skip: other mods' wrenches (c:tools/wrench), and full blocks used as facades.
+     */
     private static void onRightClickBlock(net.neoforged.neoforge.event.entity.player.PlayerInteractEvent.RightClickBlock event) {
-        if (event.getEntity().isShiftKeyDown() && event.getItemStack().is(Registration.WRENCH_TAG)
-                && event.getLevel().getBlockState(event.getPos()).is(Registration.PIPE.get())) {
+        if (!event.getEntity().isShiftKeyDown() || !event.getLevel().getBlockState(event.getPos()).is(Registration.PIPE.get())) {
+            return;
+        }
+        net.minecraft.world.item.ItemStack stack = event.getItemStack();
+        boolean wrench = stack.is(Registration.WRENCH_TAG);
+        boolean facade = stack.getItem() instanceof net.minecraft.world.item.BlockItem bi
+                && !(stack.getItem() instanceof com.xtri6.grimpipes.item.PipeItem)
+                && event.getLevel().getBlockEntity(event.getPos()) instanceof PipeBlockEntity be && be.facade() == null
+                && com.xtri6.grimpipes.block.PipeBlock.canBeFacade(bi.getBlock().defaultBlockState(), event.getLevel(), event.getPos());
+        if (wrench || facade) {
             event.setUseBlock(net.neoforged.neoforge.common.util.TriState.TRUE);
+        }
+    }
+
+    /** Sends the server's pipe speeds so screens and tooltips match them. */
+    private static void onLogin(net.neoforged.neoforge.event.entity.player.PlayerEvent.PlayerLoggedInEvent event) {
+        if (event.getEntity() instanceof net.minecraft.server.level.ServerPlayer player) {
+            com.xtri6.grimpipes.packet.Packets.sendRates(player);
+        }
+    }
+
+    private static void onConfigReload(net.neoforged.fml.event.config.ModConfigEvent.Reloading event) {
+        var server = net.neoforged.neoforge.server.ServerLifecycleHooks.getCurrentServer();
+        if (event.getConfig().getSpec() == Config.SPEC && server != null) {
+            server.execute(com.xtri6.grimpipes.packet.Packets::sendRatesToAll); // config reloads arrive off-thread
         }
     }
 

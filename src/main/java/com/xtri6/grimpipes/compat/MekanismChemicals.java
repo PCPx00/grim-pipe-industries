@@ -54,9 +54,8 @@ final class MekanismChemicals implements Chemicals.Bridge {
         long remaining = available.getAmount();
         long moved = 0;
         int n = net.outputs().size();
-        int start = (int) (net.level().getGameTime() & 0xFFFF);
         for (int i = 0; i < n && remaining > 0; i++) {
-            Endpoint dest = net.outputAt(start, i);
+            Endpoint dest = src.dest(i);
             if (dest.target().equals(src.target())) {
                 continue;
             }
@@ -81,6 +80,7 @@ final class MekanismChemicals implements Chemicals.Bridge {
             moved += done;
             remaining -= done;
         }
+        src.advance();
         return moved;
     }
 

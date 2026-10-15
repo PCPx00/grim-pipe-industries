@@ -5,6 +5,7 @@ import org.jetbrains.annotations.Nullable;
 import com.xtri6.grimpipes.Config;
 import com.xtri6.grimpipes.block.EndConfig;
 import com.xtri6.grimpipes.block.PipeBlockEntity;
+import com.xtri6.grimpipes.pipe.Distribution;
 import com.xtri6.grimpipes.pipe.PipeTier;
 import com.xtri6.grimpipes.pipe.ResourceKind;
 
@@ -39,6 +40,8 @@ public final class Endpoint {
 
     int cursor;
     int slotCursor;
+    /** Outputs ordered by priority, then by pipe distance from this end (built on first use). */
+    private Endpoint[] nearest;
     private final long[] nextRun = new long[KINDS];
     private final int[] backoff = new int[KINDS];
     private final long[] budgetWindow = new long[KINDS];
@@ -110,6 +113,56 @@ public final class Endpoint {
         return cfg == null || cfg.accepts(fluid);
     }
 
+    /** Input ends: how pulled things are spread over outputs with the same priority. */
+    public Distribution distribution() {
+        EndConfig cfg = config();
+        return cfg == null ? Distribution.ROUND_ROBIN : cfg.distribution();
+    }
+
+    /** The i-th output to try for something this end pulled, honoring priority and distribution. */
+    public Endpoint dest(int i) {
+        if (distribution() == Distribution.NEAREST) {
+            return nearest()[i];
+        }
+        return network.outputAt(cursor, i);
+    }
+
+    /** Output {@code i} of priority group {@code g}, in this end's distribution order. */
+    public Endpoint groupDest(int g, int i) {
+        if (distribution() == Distribution.NEAREST) {
+            return nearest()[network.groupStart(g) + i];
+        }
+        return network.groupOutput(g, cursor, i);
+    }
+
+    /** Moves on to the next output after an operation. */
+    public void advance() {
+        switch (distribution()) {
+            case ROUND_ROBIN -> cursor++;
+            case RANDOM -> cursor = java.util.concurrent.ThreadLocalRandom.current().nextInt(1 << 20);
+            case NEAREST -> {
+            }
+        }
+    }
+
+    private Endpoint[] nearest() {
+        if (nearest == null || nearest.length != network.outputs().size()) {
+            it.unimi.dsi.fastutil.longs.Long2IntMap dist = network.distancesFrom(pipe);
+            Endpoint[] arr = network.outputs().toArray(new Endpoint[0]);
+            // Stable sort keeps the priority-group order the network already sorted by.
+            java.util.Arrays.sort(arr, (a, b) -> {
+                int p = Integer.compare(b.priority(), a.priority());
+                if (p != 0) {
+                    return p;
+                }
+                return Integer.compare(dist.getOrDefault(a.pipe.getBlockPos().asLong(), Integer.MAX_VALUE),
+                        dist.getOrDefault(b.pipe.getBlockPos().asLong(), Integer.MAX_VALUE));
+            });
+            nearest = arr;
+        }
+        return nearest;
+    }
+
     /** This end's filter and card, or null if never configured (pulls everything). */
     @Nullable
     public EndConfig config() {
@@ -168,6 +221,7 @@ public final class Endpoint {
     void finish(ResourceKind kind, long time, boolean moved, int interval) {
         int k = kind.ordinal();
         if (moved) {
+            network.markMoved(time);
             backoff[k] = 0;
             nextRun[k] = time + interval;
         } else {
@@ -198,5 +252,8 @@ public final class Endpoint {
 
     void spend(ResourceKind kind, long amount) {
         budgetUsed[kind.ordinal()] += amount;
+        if (amount > 0) {
+            network.markMoved(level().getGameTime());
+        }
     }
 }

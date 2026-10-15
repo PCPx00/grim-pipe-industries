@@ -65,7 +65,7 @@ final class ItemTransport {
         if (moved == 0) {
             src.slotCursor = 0;
         }
-        src.cursor++;
+        src.advance();
         return moved;
     }
 
@@ -74,7 +74,7 @@ final class ItemTransport {
         int n = outs.size();
         int moved = 0;
         for (int i = 0; i < n && budget > 0; i++) {
-            Endpoint dest = net.outputAt(src.cursor, i);
+            Endpoint dest = src.dest(i);
             if (dest.target().equals(src.target())) {
                 continue; // never loop a block back into itself
             }

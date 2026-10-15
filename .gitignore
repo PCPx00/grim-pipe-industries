@@ -29,3 +29,5 @@ Thumbs.db
 run-shots/
 run-shots-server/
 run-mekcheck/
+run-compat/
+run-smoke/

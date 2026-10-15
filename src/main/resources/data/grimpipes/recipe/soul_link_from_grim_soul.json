@@ -1,0 +1,30 @@
+{
+  "neoforge:conditions": [
+    {
+      "type": "neoforge:mod_loaded",
+      "modid": "grimsoul"
+    }
+  ],
+  "type": "minecraft:crafting_shaped",
+  "category": "misc",
+  "pattern": [
+    "APA",
+    "PLP",
+    "APA"
+  ],
+  "key": {
+    "A": {
+      "item": "minecraft:amethyst_shard"
+    },
+    "P": {
+      "tag": "c:ender_pearls"
+    },
+    "L": {
+      "item": "grimsoul:reapers_lantern"
+    }
+  },
+  "result": {
+    "id": "grimpipes:soul_link",
+    "count": 1
+  }
+}

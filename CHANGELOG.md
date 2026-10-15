@@ -1,5 +1,32 @@
 # Changelog
 
+## 1.4.0 — Sorting, links, facades and polish
+
+**Control**
+- **Distribution modes** on every Input end: *Round-robin*, *Nearest first* or *Random*.
+- **Exact match** toggle (book button) on every filter: off ignores enchantments, damage and contents; on must match exactly.
+- **Reaper Tag Filter:** goes in any filter slot and matches by rule: `#c:ingots`, `#c:ores/*`, `@mekanism`, `*_log`. Shows what it matches while you type. Works for fluids too.
+- **Pipe overview:** sneak-click a pipe with an empty hand to see every end of that block at once. Click an end to open it, right-click to switch Input / Output. End screens opened from here get a Back button.
+- **Reaper Imprint:** sneak-click an end to copy its settings, click other ends to paste them.
+
+**New items and blocks**
+- **Soul Link:** joins two pipes in the same dimension into one network with no pipes in between. Reusable. Servers can limit its range (`soulLinkRange`).
+- **Facades:** sneak-right-click a pipe with a full block to hide the pipe inside it. The wrench takes the block back.
+- **Reaper Field Guide:** a 10-page in-game book.
+
+**Polish**
+- Pipes that are moving something show a subtle flowing glow. It's part of the chunk mesh, so it costs nothing per frame.
+- **Jade** and **WTHIT** tooltips: strands, and the settings of the end you're looking at.
+- **JEI** info pages for every item.
+- **Server speeds sync to players:** the screens now show the server's configured speeds, not your local config.
+
+**Grim Soul Industries**
+- With Grim Soul Industries installed: craft the Soulforged card from a Grim Soul speed card, and the Soul Link from a Reaper's Lantern.
+- Liquid Experience from XP Tanks moves through Fluid and Omni pipes (checked on a real server).
+
+**Compatibility**
+- Checked on a real server with Create, AE2, Refined Storage, Mekanism and Grim Soul Industries loaded together: items, fluids and energy go in and out of their storage and machines.
+
 ## 1.3.1 — Wrench fix
 
 - **Fixed:** sneak-clicking with the Reaper Wrench did nothing in-game, so you couldn't **disconnect a pipe end from a block you don't want it attached to**, or take a single strand out of a bundle. Minecraft skips a block's click while you sneak with an item unless the item allows it; the wrench now does, on pipes only.

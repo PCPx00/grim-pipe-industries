@@ -160,6 +160,9 @@ public final class NetworkManager {
         try {
             processQueues();
             long time = level.getGameTime();
+            if (time % 20 == 0) {
+                updateFlow(time);
+            }
             // Copy so a transfer that changes the world (and invalidates a network) can't break iteration.
             for (PipeNetwork net : new ArrayList<>(networks)) {
                 if (!net.isDestroyed()) {
@@ -211,6 +214,39 @@ public final class NetworkManager {
         return level.getBlockEntity(pos) instanceof PipeBlockEntity be && !be.isRemoved() ? be : null;
     }
 
+    /**
+     * Pipes this one is joined to for one strand type: neighbors linked arm-to-arm, plus a Soul Link partner.
+     * Never looks into unloaded chunks.
+     */
+    private void forEachLinked(PipeBlockEntity be, int t, java.util.function.Consumer<PipeBlockEntity> visit) {
+        BlockPos pos = be.getBlockPos();
+        PipeKey key = be.key();
+        PipeType type = PipeType.byIndex(t);
+        for (Direction d : Direction.values()) {
+            if (key.arm(t, d) == PipeKey.ARM_LINK) {
+                PipeBlockEntity other = pipeAt(pos.relative(d));
+                if (other != null && other.has(type) && other.key().arm(t, d.getOpposite()) == PipeKey.ARM_LINK) {
+                    visit.accept(other);
+                }
+            }
+        }
+        PipeBlockEntity partner = soulPartner(be);
+        if (partner != null && partner.has(type)) {
+            visit.accept(partner);
+        }
+    }
+
+    /** The other end of this pipe's Soul Link, if both ends are loaded and point at each other. */
+    @Nullable
+    public PipeBlockEntity soulPartner(PipeBlockEntity be) {
+        BlockPos link = be.soulLink();
+        if (link == null) {
+            return null;
+        }
+        PipeBlockEntity other = pipeAt(link);
+        return other != null && be.getBlockPos().equals(other.soulLink()) ? other : null;
+    }
+
     /** Flood-fills one strand type from a starting pipe. Never crosses into unloaded chunks. */
     private void build(PipeBlockEntity start, PipeType type) {
         int t = type.ordinal();
@@ -218,6 +254,7 @@ public final class NetworkManager {
         ArrayDeque<PipeBlockEntity> queue = new ArrayDeque<>();
         queue.add(start);
         net.members().add(start.getBlockPos().asLong());
+        boolean flowing = false;
         while (!queue.isEmpty()) {
             PipeBlockEntity be = queue.poll();
             BlockPos pos = be.getBlockPos();
@@ -227,30 +264,77 @@ public final class NetworkManager {
                 arr = byPos.computeIfAbsent(pos.asLong(), k -> new PipeNetwork[PipeType.COUNT]);
             }
             arr[t] = net;
+            flowing |= be.key().flowing(t);
 
             PipeKey key = be.key();
             for (Direction d : Direction.values()) {
                 int arm = key.arm(t, d);
                 be.setEndpoint(t, d, null);
-                if (arm == PipeKey.ARM_LINK) {
-                    BlockPos np = pos.relative(d);
-                    if (net.members().contains(np.asLong())) {
-                        continue;
-                    }
-                    PipeBlockEntity other = pipeAt(np);
-                    if (other != null && other.has(type) && other.key().arm(t, d.getOpposite()) == PipeKey.ARM_LINK) {
-                        net.members().add(np.asLong());
-                        queue.add(other);
-                    }
-                } else if (arm == PipeKey.ARM_OUTPUT || arm == PipeKey.ARM_INPUT) {
+                if (arm == PipeKey.ARM_OUTPUT || arm == PipeKey.ARM_INPUT) {
                     Endpoint e = new Endpoint(net, be, t, d, arm == PipeKey.ARM_INPUT);
                     net.addEndpoint(e);
                     be.setEndpoint(t, d, e);
                 }
             }
+            forEachLinked(be, t, other -> {
+                if (net.members().add(other.getBlockPos().asLong())) {
+                    queue.add(other);
+                }
+            });
         }
         net.finish();
+        // Pick up where the animation was, so a rebuild doesn't flicker it.
+        net.shownFlow = flowing;
+        if (flowing) {
+            net.lastMoved = level.getGameTime();
+        }
         networks.add(net);
+    }
+
+    /** Breadth-first pipe distance from {@code from} to every member of {@code net} (for nearest-first). */
+    public it.unimi.dsi.fastutil.longs.Long2IntMap distances(PipeNetwork net, PipeBlockEntity from) {
+        it.unimi.dsi.fastutil.longs.Long2IntOpenHashMap dist = new it.unimi.dsi.fastutil.longs.Long2IntOpenHashMap();
+        int t = net.type().ordinal();
+        ArrayDeque<PipeBlockEntity> queue = new ArrayDeque<>();
+        dist.put(from.getBlockPos().asLong(), 0);
+        queue.add(from);
+        while (!queue.isEmpty()) {
+            PipeBlockEntity be = queue.poll();
+            int next = dist.get(be.getBlockPos().asLong()) + 1;
+            forEachLinked(be, t, other -> {
+                long p = other.getBlockPos().asLong();
+                if (net.members().contains(p) && !dist.containsKey(p)) {
+                    dist.put(p, next);
+                    queue.add(other);
+                }
+            });
+        }
+        return dist;
+    }
+
+    // ---- Flow animation ----
+
+    /** How long a network keeps showing flow after the last thing moved through it. */
+    private static final int FLOW_HOLD_TICKS = 40;
+
+    /** Every second: networks that started or stopped moving things switch their pipes' flow animation. */
+    private void updateFlow(long time) {
+        boolean enabled = com.xtri6.grimpipes.Config.FLOW_ANIMATION.get();
+        for (PipeNetwork net : networks) {
+            boolean active = enabled && time - net.lastMoved < FLOW_HOLD_TICKS;
+            if (active == net.shownFlow) {
+                continue;
+            }
+            net.shownFlow = active;
+            int t = net.type().ordinal();
+            LongIterator it = net.members().iterator();
+            while (it.hasNext()) {
+                PipeBlockEntity be = pipeAt(BlockPos.of(it.nextLong()));
+                if (be != null) {
+                    be.setFlowing(t, active);
+                }
+            }
+        }
     }
 
     public int networkCount() {
